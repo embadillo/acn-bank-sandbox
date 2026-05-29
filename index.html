@@ -3,23 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <title>ACN Bank Chat</title>
-
   <script defer
     src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js">
   </script>
-
   <link
     rel="stylesheet"
     href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css"
   >
-
   <link
     rel="stylesheet"
     href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css"
   >
-
   <style>
     html,
     body {
@@ -29,25 +24,20 @@
       background: #f5f5f5;
       font-family: Arial, sans-serif;
     }
-
     body {
       overflow: auto;
     }
-
     chat-messenger {
       position: fixed;
       inset: 0;
       width: 100vw;
       height: 100vh;
-
       --chat-messenger-width: 100vw;
       --chat-messenger-height: 100vh;
     }
   </style>
 </head>
-
 <body>
-
   <script>
     const params = new URLSearchParams(window.location.search);
     const kycRequestId = params.get("kyc_request_id");
@@ -64,9 +54,9 @@
       const contextConfig = {
         deploymentName:
           "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-
-        enableWelcomeEvent: true,
-
+        // If KYC session: disable auto welcome so the agent's first input is our trigger
+        // If normal session: enable welcome so the agent greets the user
+        enableWelcomeEvent: !kycRequestId,
         tokenBroker: {
           enableTokenBroker: true,
           enableRecaptcha: false
@@ -74,30 +64,28 @@
       };
 
       if (kycRequestId) {
-        contextConfig.queryParams = {
-          parameters: {
-            kyc_request_id: kycRequestId,
-            customer_doc_id: customerDocId || ""
-          }
-        };
-
         contextConfig.sessionId = "kyc-" + kycRequestId;
       }
 
       console.log("CES context config:", contextConfig);
-
-      try {
-        console.log(
-          "createContext sample:",
-          chatSdk.prebuilts.ces.createContext(contextConfig)
-        );
-      } catch (e) {
-        console.log("createContext inspection failed:", e);
-      }
-
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext(contextConfig)
       );
+
+      // KYC session: send the bootstrap trigger as the first user message
+      if (kycRequestId) {
+        const kycPayload = customerDocId
+          ? `continue_kyc_upload:${kycRequestId}:${customerDocId}`
+          : `continue_kyc_upload:${kycRequestId}`;
+
+        console.log("Sending KYC bootstrap message:", kycPayload);
+
+        // Try the SDK native event first
+        window.dispatchEvent(new CustomEvent("chat-request-send", {
+          detail: { text: kycPayload },
+          bubbles: true
+        }));
+      }
     });
   </script>
 
@@ -112,19 +100,16 @@
         slot="titlebar-actions"
         title-text="Start new chat"
       ></chat-reset-session-button>
-
       <chat-toggle-dialog-button
         slot="titlebar-actions"
         title-text-expanded="Collapse"
         title-text-collapsed="Expand"
       ></chat-toggle-dialog-button>
-
       <chat-messenger-close-button
         slot="titlebar-actions"
         title-text="Close"
       ></chat-messenger-close-button>
     </chat-messenger-container>
   </chat-messenger>
-
 </body>
 </html>
