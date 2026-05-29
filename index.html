@@ -54,8 +54,6 @@
       const contextConfig = {
         deploymentName:
           "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-        // If KYC session: disable auto welcome so the agent's first input is our trigger
-        // If normal session: enable welcome so the agent greets the user
         enableWelcomeEvent: !kycRequestId,
         tokenBroker: {
           enableTokenBroker: true,
@@ -72,19 +70,49 @@
         chatSdk.prebuilts.ces.createContext(contextConfig)
       );
 
-      // KYC session: send the bootstrap trigger as the first user message
+      // KYC session: inject bootstrap message into the widget input via Shadow DOM
       if (kycRequestId) {
         const kycPayload = customerDocId
           ? `continue_kyc_upload:${kycRequestId}:${customerDocId}`
           : `continue_kyc_upload:${kycRequestId}`;
 
-        console.log("Sending KYC bootstrap message:", kycPayload);
+        console.log("KYC payload to inject:", kycPayload);
 
-        // Try the SDK native event first
-        window.dispatchEvent(new CustomEvent("chat-request-send", {
-          detail: { text: kycPayload },
-          bubbles: true
-        }));
+        const tryInject = (attempts = 0) => {
+          // The SDK uses Shadow DOM — we need to pierce it
+          const host = document.querySelector("chat-messenger");
+          const shadow = host?.shadowRoot;
+
+          // Try multiple possible input selectors inside the shadow tree
+          const input = shadow?.querySelector("input[type=text], textarea, input:not([type=hidden])");
+          const sendBtn = shadow?.querySelector(
+            "button[aria-label='Send message'], button[type=submit], button.send-button"
+          );
+
+          console.log(`Inject attempt ${attempts}: input=${!!input} sendBtn=${!!sendBtn}`);
+
+          if (input && sendBtn) {
+            // React/lit-style value setter to trigger framework listeners
+            const nativeSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLInputElement.prototype, "value"
+            ).set;
+            nativeSetter.call(input, kycPayload);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            setTimeout(() => {
+              sendBtn.click();
+              console.log("KYC bootstrap message sent.");
+            }, 150);
+          } else if (attempts < 20) {
+            // Retry every 300ms for up to 6 seconds
+            setTimeout(() => tryInject(attempts + 1), 300);
+          } else {
+            console.warn("Could not find chat input after 20 attempts.");
+          }
+        };
+
+        // Give the widget time to render before first attempt
+        setTimeout(() => tryInject(), 800);
       }
     });
   </script>
