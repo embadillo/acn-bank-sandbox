@@ -1,158 +1,118 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ACN Bank Chat</title>
-  <script defer
-    src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js">
-  </script>
-  <link
-    rel="stylesheet"
-    href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css"
-  >
-  <link
-    rel="stylesheet"
-    href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css"
-  >
-  <style>
-    html,
-    body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      background: #f5f5f5;
-      font-family: Arial, sans-serif;
-    }
-    body {
-      overflow: auto;
-    }
-    chat-messenger {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      --chat-messenger-width: 100vw;
-      --chat-messenger-height: 100vh;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACN Bank - Secure KYC Upload Portal</title>
+    
+    <script src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        .loading-container {
+            text-align: center;
+            color: #333;
+        }
+
+        /* Estilos personalizados para ajustar la estética de df-messenger si lo deseas */
+        df-messenger {
+            --df-messenger-brand-color: #004B87; /* Azul corporativo de ACN Bank */
+            --df-messenger-font-color: #333;
+            --df-messenger-chat-window-height: 80vh;
+            --df-messenger-chat-window-width: 450px;
+        }
+    </style>
 </head>
 <body>
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const kycRequestId = params.get("kyc_request_id");
-    const customerDocId = params.get("customer_doc_id");
 
-    console.log("KYC URL params:", {
-      kyc_request_id: kycRequestId,
-      customer_doc_id: customerDocId
-    });
+    <div class="loading-container">
+        <h2>Conectando con el canal seguro de ACN Bank...</h2>
+        <p>Por favor, espera un momento mientras transferimos tu sesión de verificación.</p>
+    </div>
 
-    window.addEventListener("chat-messenger-loaded", () => {
-      console.log("chatSdk keys:", Object.keys(chatSdk));
+    <df-messenger
+        chat-title="ACN Bank"
+        agent-id="b66d2738-d1cd-4a8c-a503-59e71cf89815" 
+        language-code="es"
+        df-client-v2="true">
+        <df-messenger-chat
+            chat-title="ACN Bank Validation">
+        </df-messenger-chat>
+    </df-messenger>
 
-      const contextConfig = {
-        deploymentName:
-          "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-        enableWelcomeEvent: !kycRequestId,
-        tokenBroker: {
-          enableTokenBroker: true,
-          enableRecaptcha: false
+    <script>
+        // 1. Extraemos de forma segura los parámetros desde la URL de la pestaña actual
+        const urlParams = new URLSearchParams(window.location.search);
+        const kycRequestId = urlParams.get('kyc_request_id');
+        const customerDocId = urlParams.get('customer_doc_id');
+
+        console.log("=== Parámetros Detectados ===");
+        console.log("KYC Request ID:", kycRequestId);
+        console.log("Customer Doc ID:", customerDocId);
+
+        // Solo procedemos si los parámetros obligatorios existen en la URL
+        if (kycRequestId && customerDocId) {
+            
+            // 2. Escuchamos el evento global del SDK que avisa cuando el chat de Google está montado en la página
+            window.addEventListener('df-messenger-loaded', () => {
+                console.log("Widget 'df-messenger' cargado. Iniciando inyección segura...");
+
+                const dfMessenger = document.querySelector('df-messenger');
+
+                // 3. Pequeño delay de cortesía (500ms) para garantizar el renderizado de las capas del Shadow DOM interno
+                setTimeout(() => {
+                    // Accedemos al primer nivel del Shadow Root de Google
+                    const shadowRoot = dfMessenger.shadowRoot;
+                    if (!shadowRoot) {
+                        console.error("Error crítico: No se puede acceder al Shadow Root principal de df-messenger.");
+                        return;
+                    }
+
+                    // Accedemos al segundo nivel (el chat interno oculto)
+                    const chatContent = shadowRoot.querySelector('df-messenger-chat');
+                    const chatShadowRoot = chatContent ? chatContent.shadowRoot : null;
+
+                    if (chatShadowRoot) {
+                        console.log("¡Estructura de Shadow DOM perforada con éxito!");
+
+                        // Armamos el payload con el formato exacto que espera nuestro Lead Orchestrator
+                        const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
+                        console.log("Inyectando payload invisible:", kycPayload);
+
+                        // 4. Usamos la API del SDK de Google para enviar la petición directamente al bot
+                        // Esto emula un input de usuario de forma limpia y transparente sin tocar la UI
+                        dfMessenger.sendRequest({
+                            type: 'text',
+                            text: kycPayload
+                        });
+
+                        console.log("Payload enviado exitosamente al motor de ACN Bank.");
+
+                        // Opcional: Expandir la ventana de chat automáticamente si está colapsada
+                        if (typeof dfMessenger.expandChatWindow === 'function') {
+                            dfMessenger.expandChatWindow();
+                        }
+
+                    } else {
+                        console.error("Error crítico: No se encontró la interfaz interna de chat dentro del Shadow DOM.");
+                    }
+                }, 500);
+            });
+
+        } else {
+            console.warn("Advertencia: No se detectaron parámetros KYC válidos en la URL. El chat operará en modo estándar.");
         }
-      };
+    </script>
 
-      if (kycRequestId) {
-        contextConfig.sessionId = "kyc-" + kycRequestId;
-      }
-
-      console.log("CES context config:", contextConfig);
-      chatSdk.registerContext(
-        chatSdk.prebuilts.ces.createContext(contextConfig)
-      );
-
-      // KYC session: inject bootstrap message into the widget input via Shadow DOM
-      if (kycRequestId) {
-        const kycPayload = customerDocId
-          ? `continue_kyc_upload:${kycRequestId}:${customerDocId}`
-          : `continue_kyc_upload:${kycRequestId}`;
-
-        console.log("KYC payload to inject:", kycPayload);
-
-        const tryInject = (attempts = 0) => {
-          // The SDK uses Shadow DOM — we need to pierce it
-          const host = document.querySelector("chat-messenger");
-          const shadow = host?.shadowRoot;
-
-          // Try multiple possible input selectors inside the shadow tree
-          const input = shadow?.querySelector("input[type=text], textarea, input:not([type=hidden])");
-          const sendBtn = shadow?.querySelector(
-            "button[aria-label='Send message'], button[type=submit], button.send-button"
-          );
-
-          console.log(`Inject attempt ${attempts}: input=${!!input} sendBtn=${!!sendBtn}`);
-
-          if (input && sendBtn) {
-            
-            // --- PARCHE DE INTERFAZ: OCULTAR MENSAJE TÉCNICO ---
-            // Inyectamos estilos directamente en el Shadow DOM del SDK para ocultar visualmente la burbuja
-            const style = document.createElement('style');
-            style.textContent = `
-              df-messenger-message[by-user="true"]:first-of-type,
-              .message-list .message.user:first-of-type,
-              .user-message-bubble-wrapper:first-of-type {
-                display: none !important;
-              }
-            `;
-            shadow.appendChild(style);
-            // ----------------------------------------------------
-
-            // React/lit-style value setter to trigger framework listeners
-            const nativeSetter = Object.getOwnPropertyDescriptor(
-              window.HTMLInputElement.prototype, "value"
-            ).set;
-            nativeSetter.call(input, kycPayload);
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-            input.dispatchEvent(new Event("change", { bubbles: true }));
-            
-            setTimeout(() => {
-              sendBtn.click();
-              console.log("KYC bootstrap message sent invisibly.");
-            }, 150);
-          } else if (attempts < 20) {
-            // Retry every 300ms for up to 6 seconds
-            setTimeout(() => tryInject(attempts + 1), 300);
-          } else {
-            console.warn("Could not find chat input after 20 attempts.");
-          }
-        };
-
-        // Give the widget time to render before first attempt
-        setTimeout(() => tryInject(), 800);
-      }
-    });
-  </script>
-
-  <chat-messenger url-allowlist="*">
-    <chat-messenger-container
-      chat-title="ACN Bank"
-      chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
-      enable-file-upload
-      enable-audio-input
-    >
-      <chat-reset-session-button
-        slot="titlebar-actions"
-        title-text="Start new chat"
-      ></chat-reset-session-button>
-      <chat-toggle-dialog-button
-        slot="titlebar-actions"
-        title-text-expanded="Collapse"
-        title-text-collapsed="Expand"
-      ></chat-toggle-dialog-button>
-      <chat-messenger-close-button
-        slot="titlebar-actions"
-        title-text="Close"
-      ></chat-messenger-close-button>
-    </chat-messenger-container>
-  </chat-messenger>
 </body>
 </html>
