@@ -29,7 +29,7 @@
             padding: 20px;
         }
 
-        /* Forzamos a que el chat ocupe una posición visible en la pantalla */
+        /* Ajuste de posición para el widget nativo de Google */
         chat-messenger {
             position: fixed;
             bottom: 20px;
@@ -84,19 +84,39 @@
                 }),
             );
 
-            // 3. Si los datos existen, inyectamos el comando de forma transparente
+            // 3. Si los datos existen, ejecutamos la inyección segura y dinámica
             if (kycRequestId && customerDocId) {
                 setTimeout(() => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-                    console.log("Injecting payload via chatSdk:", kycPayload);
+                    console.log("Attempting payload injection:", kycPayload);
 
-                    // Envío directo a través del bus del SDK sin tocar el DOM manual
-                    chatSdk.sendMessage({
-                        text: kycPayload
-                    });
+                    const chatEl = document.querySelector('chat-messenger');
 
-                    console.log("Payload sent! Check Dialogflow execution logs.");
-                }, 1000); // 1 segundo de espera para asegurar que la conexión de red interna del bot esté abierta
+                    // Prueba de método 1: Directo sobre el componente HTML <chat-messenger>
+                    if (chatEl && typeof chatEl.sendMessage === 'function') {
+                        chatEl.sendMessage({ text: kycPayload });
+                        console.log("Payload sent via chatEl.sendMessage!");
+                    } 
+                    // Prueba de método 2: sendRequest a nivel global (API alternativa)
+                    else if (typeof chatSdk.sendRequest === 'function') {
+                        chatSdk.sendRequest({ type: 'text', text: kycPayload });
+                        console.log("Payload sent via chatSdk.sendRequest!");
+                    }
+                    // Prueba de método 3: sendQuery plano (Método clásico de compatibilidad)
+                    else if (chatEl && typeof chatEl.sendQuery === 'function') {
+                        chatEl.sendQuery(kycPayload);
+                        console.log("Payload sent via chatEl.sendQuery!");
+                    }
+                    // Si tu versión requiere inyección en el bus de mensajes del container
+                    else if (typeof chatSdk.sendMessage === 'function') {
+                        chatSdk.sendMessage({ text: kycPayload });
+                        console.log("Payload sent via fallback chatSdk.sendMessage!");
+                    }
+                    else {
+                        console.error("Critical: No execution method found for this version of Google CES SDK.");
+                    }
+
+                }, 1200); // 1.2 segundos para asegurar el handshake de red del bot
             } else {
                 console.warn("No parameters found in URL. Operating in standard user mode.");
             }
