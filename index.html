@@ -1,15 +1,18 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACN Bank - Secure KYC Upload Portal</title>
     
-    <script src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+    <!-- Archivos obligatorios del SDK de Google Conversational Agents (CES) v1.16 -->
+    <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+    <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+    <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
     
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #f4f6f9;
             margin: 0;
             padding: 0;
@@ -22,96 +25,82 @@
         .loading-container {
             text-align: center;
             color: #333;
+            max-width: 400px;
+            padding: 20px;
         }
 
-        /* Estilos personalizados para ajustar la estética de df-messenger si lo deseas */
-        df-messenger {
-            --df-messenger-brand-color: #004B87; /* Azul corporativo de ACN Bank */
-            --df-messenger-font-color: #333;
-            --df-messenger-chat-window-height: 80vh;
-            --df-messenger-chat-window-width: 450px;
+        /* Forzamos a que el chat ocupe una posición visible en la pantalla */
+        chat-messenger {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
         }
     </style>
 </head>
 <body>
 
     <div class="loading-container">
-        <h2>Conectando con el canal seguro de ACN Bank...</h2>
-        <p>Por favor, espera un momento mientras transferimos tu sesión de verificación.</p>
+        <h2>Connecting to ACN Bank secure channel...</h2>
+        <p>Please wait while we transfer your verification session.</p>
     </div>
 
-    <df-messenger
+    <!-- Tu componente nativo de Google Cloud -->
+    <chat-messenger url-allowlist="*">
+      <chat-messenger-container
         chat-title="ACN Bank"
-        agent-id="b66d2738-d1cd-4a8c-a503-59e71cf89815" 
-        language-code="es"
-        df-client-v2="true">
-        <df-messenger-chat
-            chat-title="ACN Bank Validation">
-        </df-messenger-chat>
-    </df-messenger>
+        chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
+        enable-file-upload
+        enable-audio-input
+      >
+        <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+        <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+        <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
+      </chat-messenger-container>
+    </chat-messenger>
 
     <script>
-        // 1. Extraemos de forma segura los parámetros desde la URL de la pestaña actual
+        // 1. Parsear parámetros KYC desde la URL actual
         const urlParams = new URLSearchParams(window.location.search);
         const kycRequestId = urlParams.get('kyc_request_id');
         const customerDocId = urlParams.get('customer_doc_id');
 
-        console.log("=== Parámetros Detectados ===");
+        console.log("=== KYC Parameters Detected ===");
         console.log("KYC Request ID:", kycRequestId);
         console.log("Customer Doc ID:", customerDocId);
 
-        // Solo procedemos si los parámetros obligatorios existen en la URL
-        if (kycRequestId && customerDocId) {
-            
-            // 2. Escuchamos el evento global del SDK que avisa cuando el chat de Google está montado en la página
-            window.addEventListener('df-messenger-loaded', () => {
-                console.log("Widget 'df-messenger' cargado. Iniciando inyección segura...");
+        // 2. Esperar a que el script de Google esté listo en el DOM
+        window.addEventListener("chat-messenger-loaded", () => {
+            console.log("Google Chat SDK successfully initialized.");
 
-                const dfMessenger = document.querySelector('df-messenger');
+            // Inicializamos el contexto oficial de tu agente en GCP
+            chatSdk.registerContext(
+                chatSdk.prebuilts.ces.createContext({
+                    deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                    tokenBroker: {
+                        enableTokenBroker: true,
+                        enableRecaptcha: false
+                    }
+                }),
+            );
 
-                // 3. Pequeño delay de cortesía (500ms) para garantizar el renderizado de las capas del Shadow DOM interno
+            // 3. Si los datos existen, inyectamos el comando de forma transparente
+            if (kycRequestId && customerDocId) {
                 setTimeout(() => {
-                    // Accedemos al primer nivel del Shadow Root de Google
-                    const shadowRoot = dfMessenger.shadowRoot;
-                    if (!shadowRoot) {
-                        console.error("Error crítico: No se puede acceder al Shadow Root principal de df-messenger.");
-                        return;
-                    }
+                    const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
+                    console.log("Injecting payload via chatSdk:", kycPayload);
 
-                    // Accedemos al segundo nivel (el chat interno oculto)
-                    const chatContent = shadowRoot.querySelector('df-messenger-chat');
-                    const chatShadowRoot = chatContent ? chatContent.shadowRoot : null;
+                    // Envío directo a través del bus del SDK sin tocar el DOM manual
+                    chatSdk.sendMessage({
+                        text: kycPayload
+                    });
 
-                    if (chatShadowRoot) {
-                        console.log("¡Estructura de Shadow DOM perforada con éxito!");
-
-                        // Armamos el payload con el formato exacto que espera nuestro Lead Orchestrator
-                        const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-                        console.log("Inyectando payload invisible:", kycPayload);
-
-                        // 4. Usamos la API del SDK de Google para enviar la petición directamente al bot
-                        // Esto emula un input de usuario de forma limpia y transparente sin tocar la UI
-                        dfMessenger.sendRequest({
-                            type: 'text',
-                            text: kycPayload
-                        });
-
-                        console.log("Payload enviado exitosamente al motor de ACN Bank.");
-
-                        // Opcional: Expandir la ventana de chat automáticamente si está colapsada
-                        if (typeof dfMessenger.expandChatWindow === 'function') {
-                            dfMessenger.expandChatWindow();
-                        }
-
-                    } else {
-                        console.error("Error crítico: No se encontró la interfaz interna de chat dentro del Shadow DOM.");
-                    }
-                }, 500);
-            });
-
-        } else {
-            console.warn("Advertencia: No se detectaron parámetros KYC válidos en la URL. El chat operará en modo estándar.");
-        }
+                    console.log("Payload sent! Check Dialogflow execution logs.");
+                }, 1000); // 1 segundo de espera para asegurar que la conexión de red interna del bot esté abierta
+            } else {
+                console.warn("No parameters found in URL. Operating in standard user mode.");
+            }
+        });
     </script>
 
 </body>
