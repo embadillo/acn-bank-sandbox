@@ -29,7 +29,7 @@
             padding: 20px;
         }
 
-        /* Ajuste de posición para el widget nativo de Google */
+        /* Forzamos a que el widget se posicione correctamente en la UI */
         chat-messenger {
             position: fixed;
             bottom: 20px;
@@ -84,7 +84,7 @@
                 }),
             );
 
-            // 3. Si los datos existen, ejecutamos la inyección segura y dinámica
+            // 3. Si los datos existen, abrimos e inyectamos de forma transparente
             if (kycRequestId && customerDocId) {
                 setTimeout(() => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
@@ -92,25 +92,33 @@
 
                     const chatEl = document.querySelector('chat-messenger');
 
-                    // Prueba de método 1: Directo sobre el componente HTML <chat-messenger>
-                    if (chatEl && typeof chatEl.sendMessage === 'function') {
-                        chatEl.sendMessage({ text: kycPayload });
-                        console.log("Payload sent via chatEl.sendMessage!");
-                    } 
-                    // Prueba de método 2: sendRequest a nivel global (API alternativa)
-                    else if (typeof chatSdk.sendRequest === 'function') {
-                        chatSdk.sendRequest({ type: 'text', text: kycPayload });
-                        console.log("Payload sent via chatSdk.sendRequest!");
+                    // === PASO A: Forzar apertura visual del Chat ===
+                    if (chatEl) {
+                        if (typeof chatEl.openChat === 'function') {
+                            chatEl.openChat();
+                            console.log("Chat window expanded via openChat().");
+                        } else if (typeof chatEl.expandChatWindow === 'function') {
+                            chatEl.expandChatWindow();
+                            console.log("Chat window expanded via expandChatWindow().");
+                        } else {
+                            // Alternativa por atributo HTML directo si los métodos JS fallan
+                            chatEl.setAttribute('open', 'true');
+                            console.log("Chat window expanded via 'open' attribute.");
+                        }
                     }
-                    // Prueba de método 3: sendQuery plano (Método clásico de compatibilidad)
-                    else if (chatEl && typeof chatEl.sendQuery === 'function') {
+
+                    // === PASO B: Envío dinámico del Payload (Priorizando el método validado) ===
+                    if (chatEl && typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
                         console.log("Payload sent via chatEl.sendQuery!");
                     }
-                    // Si tu versión requiere inyección en el bus de mensajes del container
-                    else if (typeof chatSdk.sendMessage === 'function') {
-                        chatSdk.sendMessage({ text: kycPayload });
-                        console.log("Payload sent via fallback chatSdk.sendMessage!");
+                    else if (chatEl && typeof chatEl.sendMessage === 'function') {
+                        chatEl.sendMessage({ text: kycPayload });
+                        console.log("Payload sent via chatEl.sendMessage!");
+                    } 
+                    else if (typeof chatSdk.sendRequest === 'function') {
+                        chatSdk.sendRequest({ type: 'text', text: kycPayload });
+                        console.log("Payload sent via chatSdk.sendRequest!");
                     }
                     else {
                         console.error("Critical: No execution method found for this version of Google CES SDK.");
