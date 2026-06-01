@@ -90,51 +90,72 @@
         window.addEventListener("chat-messenger-loaded", () => {
             console.log("Google Chat SDK successfully initialized.");
 
-            chatSdk.registerContext(
-                chatSdk.prebuilts.ces.createContext({
-                    deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-                    tokenBroker: {
-                        enableTokenBroker: true,
-                        enableRecaptcha: false
-                    }
-                }),
-            );
+            // Función auxiliar para forzar la visualización full screen del widget de chat
+            const displayChatInterface = () => {
+                const chatEl = document.querySelector('chat-messenger');
+                const loadingScreen = document.getElementById('loadingScreen');
 
+                if (chatEl) {
+                    chatEl.style.display = 'block';
+                    if (typeof chatEl.openChat === 'function') chatEl.openChat();
+                    else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
+                    else chatEl.setAttribute('open', 'true');
+                }
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
+                console.log("UI switched: Loading screen hidden, chat-messenger brought to front.");
+            };
+
+            // CASO A: Flujo con parámetros desde la llamada de voz (Handoff Activo)
             if (kycRequestId && customerDocId) {
+                
+                chatSdk.registerContext(
+                    chatSdk.prebuilts.ces.createContext({
+                        deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                        tokenBroker: {
+                            enableTokenBroker: true,
+                            enableRecaptcha: false
+                        }
+                    }),
+                );
+
                 setTimeout(() => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
                     console.log("Attempting payload injection:", kycPayload);
 
+                    displayChatInterface();
+
                     const chatEl = document.querySelector('chat-messenger');
-                    const loadingScreen = document.getElementById('loadingScreen');
-
-                    if (chatEl) {
-                        // 1. Mostramos el componente alterando el display block
-                        chatEl.style.display = 'block';
-                        
-                        // 2. Ejecutamos comandos de apertura oficiales del componente
-                        if (typeof chatEl.openChat === 'function') chatEl.openChat();
-                        else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
-                        else chatEl.setAttribute('open', 'true');
-
-                        // 3. Ocultamos la pantalla de carga para que no estorbe visualmente
-                        if (loadingScreen) {
-                            loadingScreen.style.display = 'none';
-                        }
-                        console.log("UI switched: Loading screen hidden, chat-messenger brought to front.");
-                    }
-
-                    // 4. Envío del query al motor de Google
                     if (chatEl && typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
                         console.log("Payload sent via chatEl.sendQuery!");
                     } else if (chatEl && typeof chatEl.sendMessage === 'function') {
                         chatEl.sendMessage({ text: kycPayload });
                     }
+                }, 1500);
 
-                }, 1500); // 1.5 segundos para dar tiempo a que la UI de Google se estabilice
+            // CASO B: Flujo de usuario estándar (Entrada directa por URL limpia)
             } else {
                 console.warn("No parameters found in URL. Operating in standard user mode.");
+                
+                // Inicializamos pasándole session parameters que desactiven el bypass de KYC en Dialogflow
+                chatSdk.registerContext(
+                    chatSdk.prebuilts.ces.createContext({
+                        deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                        tokenBroker: {
+                            enableTokenBroker: true,
+                            enableRecaptcha: false
+                        },
+                        // Inyectamos el parámetro indicando que NO viene de una llamada de voz
+                        sessionParameters: {
+                            "is_voice_handoff": false
+                        }
+                    }),
+                );
+
+                // Mostramos el chat inmediatamente sin timeouts artificiales
+                displayChatInterface();
             }
         });
     </script>
