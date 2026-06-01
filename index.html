@@ -92,6 +92,20 @@
           console.log(`Inject attempt ${attempts}: input=${!!input} sendBtn=${!!sendBtn}`);
 
           if (input && sendBtn) {
+            
+            // --- PARCHE DE INTERFAZ: OCULTAR MENSAJE TÉCNICO ---
+            // Inyectamos estilos directamente en el Shadow DOM del SDK para ocultar visualmente la burbuja
+            const style = document.createElement('style');
+            style.textContent = `
+              df-messenger-message[by-user="true"]:first-of-type,
+              .message-list .message.user:first-of-type,
+              .user-message-bubble-wrapper:first-of-type {
+                display: none !important;
+              }
+            `;
+            shadow.appendChild(style);
+            // ----------------------------------------------------
+
             // React/lit-style value setter to trigger framework listeners
             const nativeSetter = Object.getOwnPropertyDescriptor(
               window.HTMLInputElement.prototype, "value"
@@ -99,9 +113,10 @@
             nativeSetter.call(input, kycPayload);
             input.dispatchEvent(new Event("input", { bubbles: true }));
             input.dispatchEvent(new Event("change", { bubbles: true }));
+            
             setTimeout(() => {
               sendBtn.click();
-              console.log("KYC bootstrap message sent.");
+              console.log("KYC bootstrap message sent invisibly.");
             }, 150);
           } else if (attempts < 20) {
             // Retry every 300ms for up to 6 seconds
