@@ -114,18 +114,13 @@
                 return;
             }
             
-            // Configuración base de Dialogflow CX (Se preservan tus IDs originales)
-            const deploymentConfig = {
-                deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-                tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
-            };
+            // Asignación directa de propiedades sobre el elemento para evitar errores de API asíncrona
+            chatEl.deploymentName = "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7";
+            chatEl.tokenBroker = { enableTokenBroker: true, enableRecaptcha: false };
 
             // CASO A: Flujo con parámetros desde la llamada de voz (Handoff Activo)
             if (kycRequestId && customerDocId) {
                 
-                // Usamos la API local instanciada directamente en el elemento del DOM
-                chatEl.registerContext(chatEl.createContext(deploymentConfig));
-
                 // Escuchamos el evento nativo para asegurar que la sesión con Dialogflow está abierta
                 chatEl.addEventListener('df-session-started', () => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
@@ -141,17 +136,14 @@
                         chatEl.sendMessage({ text: kycPayload });
                         console.log("Payload sent via chatEl.sendMessage!");
                     }
-                }, { once: true }); // Evita que se vuelva a disparar si se resetea la conversación
+                }, { once: true }); // Evita disparos duplicados al resetear sesión
 
             // CASO B: Flujo de usuario estándar (Entrada directa por URL limpia)
             } else {
                 console.warn("No parameters found in URL. Operating in standard user mode.");
                 
-                // Pasamos el session parameter para avisar al agente de Dialogflow que no viene de telefonía
-                deploymentConfig.sessionParameters = { "is_voice_handoff": false };
-                
-                // Usamos la API local instanciada directamente en el elemento del DOM
-                chatEl.registerContext(chatEl.createContext(deploymentConfig));
+                // Pasamos el session parameter directamente al elemento del DOM
+                chatEl.sessionParameters = { "is_voice_handoff": false };
                 
                 displayChatInterface();
             }
