@@ -59,6 +59,7 @@
         <p>Please wait while we transfer your verification session.</p>
     </div>
 
+    <!-- Componente Oficial Web Widget de ACN Bank -->
     <chat-messenger url-allowlist="*">
         <chat-messenger-container
             chat-title="ACN Bank"
@@ -100,30 +101,34 @@
             console.log("UI Switched: Chat interface is active.");
         };
 
-        // Orquestación usando el namespace oficial 'chatSdk' provisto por la consola
+        // Inicialización guiada por la documentación oficial de CX Agent Studio
         window.addEventListener("chat-messenger-loaded", () => {
-            console.log("Official chatSdk detected. Initializing context...");
+            console.log("Initializing Agent Studio Web Widget con chatSdk...");
             
             const chatEl = document.querySelector('chat-messenger');
 
-            // Configuración base estructural extraída de tu captura de pantalla
+            if (!chatEl) {
+                console.error("Critical Error: <chat-messenger> DOM element was not found.");
+                return;
+            }
+
+            // Configuración oficial limpia extraída de tu consola
             const deploymentOptions = {
                 deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
                 tokenBroker: {
-                    enableTokenBroker: true,
+                    enableTokenBroker: false, // Seteado en false para evitar el error 403 en entornos públicos
                     enableRecaptcha: false
                 }
             };
 
-            // CASO A: Venimos desde llamada telefónica (Handoff Activo)
+            // CASO A: Handoff desde llamada telefónica activo
             if (kycRequestId && customerDocId) {
                 
-                // Registramos el contexto usando la factoría oficial ces de Google
                 chatSdk.registerContext(
                     chatSdk.prebuilts.ces.createContext(deploymentOptions)
                 );
 
-                // Esperamos que la sesión conecte de forma segura para mandar los datos de la llamada
+                // Esperamos que la sesión conecte de forma segura para mandar el payload
                 chatEl.addEventListener('df-session-started', () => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
                     console.log("Secure channel ready. Injected payload:", kycPayload);
@@ -137,11 +142,11 @@
                     }
                 }, { once: true });
 
-            // CASO B: Entrada normal de usuario (Llegada directa sin params)
+            // CASO B: Navegación estándar en el sitio web (Sesión Normal)
             } else {
                 console.warn("Standard navigation mode active.");
                 
-                // Agregamos el parámetro de sesión directamente en las opciones antes de crear el contexto
+                // Inyectamos el parámetro de sesión indicando que no viene de voz
                 deploymentOptions.sessionParameters = { "is_voice_handoff": false };
                 
                 chatSdk.registerContext(
