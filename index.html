@@ -1,14 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACN Bank - Secure KYC Upload Portal</title>
-    
     <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
-    
     <style>
         html, body {
             margin: 0;
@@ -19,7 +17,6 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
-        
         .loading-container {
             position: absolute;
             top: 0;
@@ -36,7 +33,6 @@
             background-color: #f4f6f9;
             transition: opacity 0.4s ease;
         }
-
         /* Hack de Estilos para obligar al chat de Google a ser Full Screen e incrustado */
         chat-messenger {
             position: absolute !important;
@@ -50,7 +46,6 @@
             z-index: 5;
             display: none; /* Arranca oculto y lo mostramos por JS de golpe */
         }
-
         /* Forzamos a los contenedores internos del Shadow DOM a estirarse al 100% */
         chat-messenger-container {
             width: 100% !important;
@@ -65,17 +60,19 @@
         <p>Please wait while we transfer your verification session.</p>
     </div>
 
+    <!-- Contenedor del Chat con el tag de cierre corregido -->
     <chat-messenger url-allowlist="*">
-      <chat-messenger-container
-        chat-title="ACN Bank"
-        chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
-        enable-file-upload
-        enable-audio-input
-      >
-        <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
-        <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
-        <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
-      </chat-messenger-container>
+        <chat-messenger-container
+            chat-title="ACN Bank"
+            chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
+            enable-file-upload
+            enable-audio-input>
+            
+            <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+            <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+            <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
+            
+        </chat-messenger-container>
     </chat-messenger>
 
     <script>
@@ -87,78 +84,72 @@
         console.log("KYC Request ID:", kycRequestId);
         console.log("Customer Doc ID:", customerDocId);
 
+        // Función auxiliar para forzar la visualización full screen del widget de chat
+        const displayChatInterface = () => {
+            const chatEl = document.querySelector('chat-messenger');
+            const loadingScreen = document.getElementById('loadingScreen');
+            
+            if (chatEl) {
+                chatEl.style.display = 'block';
+                if (typeof chatEl.expandChatWindow === 'function') {
+                    chatEl.expandChatWindow();
+                } else {
+                    chatEl.setAttribute('open', 'true');
+                }
+            }
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+            console.log("UI switched: Loading screen hidden, chat-messenger brought to front.");
+        };
+
+        // Escuchamos el evento de carga nativo del SDK de Google
         window.addEventListener("chat-messenger-loaded", () => {
             console.log("Google Chat SDK successfully initialized.");
-
-            // Función auxiliar para forzar la visualización full screen del widget de chat
-            const displayChatInterface = () => {
-                const chatEl = document.querySelector('chat-messenger');
-                const loadingScreen = document.getElementById('loadingScreen');
-
-                if (chatEl) {
-                    chatEl.style.display = 'block';
-                    if (typeof chatEl.openChat === 'function') chatEl.openChat();
-                    else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
-                    else chatEl.setAttribute('open', 'true');
-                }
-                if (loadingScreen) {
-                    loadingScreen.style.display = 'none';
-                }
-                console.log("UI switched: Loading screen hidden, chat-messenger brought to front.");
+            
+            const chatEl = document.querySelector('chat-messenger');
+            
+            // Configuración base del Deployment
+            const deploymentConfig = {
+                deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
             };
 
             // CASO A: Flujo con parámetros desde la llamada de voz (Handoff Activo)
             if (kycRequestId && customerDocId) {
                 
-                chatSdk.registerContext(
-                    chatSdk.prebuilts.ces.createContext({
-                        deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-                        tokenBroker: {
-                            enableTokenBroker: true,
-                            enableRecaptcha: false
-                        }
-                    }),
-                );
+                // Registro utilizando la API global nativa 'dfMessenger'
+                dfMessenger.registerContext(dfMessenger.createContext(deploymentConfig));
 
-                setTimeout(() => {
+                // Escuchamos el evento nativo para asegurar que la sesión con Dialogflow está abierta
+                chatEl.addEventListener('df-session-started', () => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-                    console.log("Attempting payload injection:", kycPayload);
-
+                    console.log("Session verified active. Injecting payload:", kycPayload);
+                    
                     displayChatInterface();
 
-                    const chatEl = document.querySelector('chat-messenger');
-                    if (chatEl && typeof chatEl.sendQuery === 'function') {
+                    // Envío de query seguro evaluando firmas del SDK
+                    if (typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
                         console.log("Payload sent via chatEl.sendQuery!");
-                    } else if (chatEl && typeof chatEl.sendMessage === 'function') {
+                    } else if (typeof chatEl.sendMessage === 'function') {
                         chatEl.sendMessage({ text: kycPayload });
+                        console.log("Payload sent via chatEl.sendMessage!");
                     }
-                }, 1500);
+                }, { once: true }); // Evita disparos duplicados al resetear sesión
 
             // CASO B: Flujo de usuario estándar (Entrada directa por URL limpia)
             } else {
                 console.warn("No parameters found in URL. Operating in standard user mode.");
                 
-                // Inicializamos pasándole session parameters que desactiven el bypass de KYC en Dialogflow
-                chatSdk.registerContext(
-                    chatSdk.prebuilts.ces.createContext({
-                        deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-                        tokenBroker: {
-                            enableTokenBroker: true,
-                            enableRecaptcha: false
-                        },
-                        // Inyectamos el parámetro indicando que NO viene de una llamada de voz
-                        sessionParameters: {
-                            "is_voice_handoff": false
-                        }
-                    }),
-                );
-
-                // Mostramos el chat inmediatamente sin timeouts artificiales
+                // Pasamos el session parameter para avisar al agente que no es un handoff de telefonía
+                deploymentConfig.sessionParameters = { "is_voice_handoff": false };
+                
+                dfMessenger.registerContext(dfMessenger.createContext(deploymentConfig));
+                
                 displayChatInterface();
             }
         });
     </script>
-
 </body>
 </html>
