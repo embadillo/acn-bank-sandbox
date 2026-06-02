@@ -1,50 +1,40 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACN Bank</title>
+    <title>ACN Bank - Secure KYC Upload Portal</title>
+    
+    <!-- URLs del deployment oficial -->
     <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+    
     <style>
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100vh;
+            margin: 0; padding: 0;
+            width: 100%; height: 100vh;
             background-color: #f4f6f9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
         .loading-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            color: #333;
-            z-index: 10;
-            background-color: #f4f6f9;
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100vh;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            text-align: center; color: #333;
+            z-index: 10; background-color: #f4f6f9;
             transition: opacity 0.4s ease;
         }
-        /* Forzamos al widget a renderizar empotrado a pantalla completa */
         chat-messenger {
             position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100vh !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important; height: 100vh !important;
             max-height: 100vh !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            margin: 0 !important; padding: 0 !important;
             z-index: 5;
-            display: none; 
+            display: none;
         }
         chat-messenger-container {
             width: 100% !important;
@@ -59,18 +49,15 @@
         <p>Please wait while we transfer your verification session.</p>
     </div>
 
-    <!-- Componente Oficial Web Widget de ACN Bank -->
     <chat-messenger url-allowlist="*">
         <chat-messenger-container
             chat-title="ACN Bank"
             chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
             enable-file-upload
             enable-audio-input>
-            
             <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
             <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
             <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
-            
         </chat-messenger-container>
     </chat-messenger>
 
@@ -83,79 +70,57 @@
         console.log("KYC Request ID:", kycRequestId);
         console.log("Customer Doc ID:", customerDocId);
 
-        const displayChatInterface = () => {
-            const chatEl = document.querySelector('chat-messenger');
-            const loadingScreen = document.getElementById('loadingScreen');
-            
-            if (chatEl) {
-                chatEl.style.display = 'block';
-                if (typeof chatEl.expandChatWindow === 'function') {
-                    chatEl.expandChatWindow();
-                } else {
-                    chatEl.setAttribute('open', 'true');
-                }
-            }
-            if (loadingScreen) {
-                loadingScreen.style.display = 'none';
-            }
-            console.log("UI Switched: Chat interface is active.");
-        };
-
-        // Inicialización guiada por la documentación oficial de CX Agent Studio
         window.addEventListener("chat-messenger-loaded", () => {
-            console.log("Initializing Agent Studio Web Widget con chatSdk...");
-            
-            const chatEl = document.querySelector('chat-messenger');
+            console.log("Widget loaded. Registering context...");
 
-            if (!chatEl) {
-                console.error("Critical Error: <chat-messenger> DOM element was not found.");
-                return;
-            }
+            // Context del deployment oficial — tokenBroker ya habilitado
+            chatSdk.registerContext(
+                chatSdk.prebuilts.ces.createContext({
+                    deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                    tokenBroker: {
+                        enableTokenBroker: true,
+                        enableRecaptcha: false
+                    }
+                }),
+            );
 
-            // Configuración oficial limpia extraída de tu consola
-            const deploymentOptions = {
-                deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
-                tokenBroker: {
-                    enableTokenBroker: false, // Seteado en false para evitar el error 403 en entornos públicos
-                    enableRecaptcha: false
-                }
-            };
-
-            // CASO A: Handoff desde llamada telefónica activo
             if (kycRequestId && customerDocId) {
-                
-                chatSdk.registerContext(
-                    chatSdk.prebuilts.ces.createContext(deploymentOptions)
-                );
-
-                // Esperamos que la sesión conecte de forma segura para mandar el payload
-                chatEl.addEventListener('df-session-started', () => {
+                setTimeout(() => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-                    console.log("Secure channel ready. Injected payload:", kycPayload);
-                    
-                    displayChatInterface();
+                    console.log("Injecting KYC payload:", kycPayload);
 
-                    if (typeof chatEl.sendQuery === 'function') {
+                    const chatEl = document.querySelector('chat-messenger');
+                    const loadingScreen = document.getElementById('loadingScreen');
+
+                    if (chatEl) {
+                        chatEl.style.display = 'block';
+
+                        if (typeof chatEl.openChat === 'function') chatEl.openChat();
+                        else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
+                        else chatEl.setAttribute('open', 'true');
+
+                        if (loadingScreen) loadingScreen.style.display = 'none';
+                    }
+
+                    if (chatEl && typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
-                    } else if (typeof chatEl.sendMessage === 'function') {
+                        console.log("Payload sent via sendQuery.");
+                    } else if (chatEl && typeof chatEl.sendMessage === 'function') {
                         chatEl.sendMessage({ text: kycPayload });
                     }
-                }, { once: true });
 
-            // CASO B: Navegación estándar en el sitio web (Sesión Normal)
+                }, 1500);
+
             } else {
-                console.warn("Standard navigation mode active.");
-                
-                // Inyectamos el parámetro de sesión indicando que no viene de voz
-                deploymentOptions.sessionParameters = { "is_voice_handoff": false };
-                
-                chatSdk.registerContext(
-                    chatSdk.prebuilts.ces.createContext(deploymentOptions)
-                );
-                
-                displayChatInterface();
+                // Caso B — navegación estándar, mostrar widget normalmente
+                console.warn("No KYC params. Standard mode.");
+                const chatEl = document.querySelector('chat-messenger');
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (chatEl) chatEl.style.display = 'block';
+                if (loadingScreen) loadingScreen.style.display = 'none';
             }
         });
     </script>
+
 </body>
 </html>
