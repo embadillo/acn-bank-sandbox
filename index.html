@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACN Bank - Secure KYC Upload Portal</title>
+    <title>ACN Bank</title>
     <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
     <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
@@ -33,7 +33,7 @@
             background-color: #f4f6f9;
             transition: opacity 0.4s ease;
         }
-        /* Hack de Estilos para obligar al chat de Google a ser Full Screen e incrustado */
+        /* Forzamos al widget a renderizar empotrado a pantalla completa */
         chat-messenger {
             position: absolute !important;
             top: 0 !important;
@@ -44,9 +44,8 @@
             margin: 0 !important;
             padding: 0 !important;
             z-index: 5;
-            display: none; /* Arranca oculto y lo mostramos por JS de golpe */
+            display: none; 
         }
-        /* Forzamos a los contenedores internos del Shadow DOM a estirarse al 100% */
         chat-messenger-container {
             width: 100% !important;
             height: 100% !important;
@@ -60,7 +59,6 @@
         <p>Please wait while we transfer your verification session.</p>
     </div>
 
-    <!-- Contenedor del Chat con etiquetas HTML perfectamente estructuradas -->
     <chat-messenger url-allowlist="*">
         <chat-messenger-container
             chat-title="ACN Bank"
@@ -84,7 +82,6 @@
         console.log("KYC Request ID:", kycRequestId);
         console.log("Customer Doc ID:", customerDocId);
 
-        // Función auxiliar para forzar la visualización full screen del widget de chat
         const displayChatInterface = () => {
             const chatEl = document.querySelector('chat-messenger');
             const loadingScreen = document.getElementById('loadingScreen');
@@ -100,50 +97,56 @@
             if (loadingScreen) {
                 loadingScreen.style.display = 'none';
             }
-            console.log("UI switched: Loading screen hidden, chat-messenger brought to front.");
+            console.log("UI Switched: Chat interface is active.");
         };
 
-        // Escuchamos el evento de carga nativo del SDK de Google chat-messenger
+        // Orquestación usando el namespace oficial 'chatSdk' provisto por la consola
         window.addEventListener("chat-messenger-loaded", () => {
-            console.log("Google Chat SDK successfully initialized.");
+            console.log("Official chatSdk detected. Initializing context...");
             
             const chatEl = document.querySelector('chat-messenger');
-            
-            if (!chatEl) {
-                console.error("Critical Error: <chat-messenger> DOM element was not found.");
-                return;
-            }
-            
-            // Asignación directa de propiedades sobre el elemento para evitar errores de API asíncrona
-            chatEl.deploymentName = "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7";
-            chatEl.tokenBroker = { enableTokenBroker: true, enableRecaptcha: false };
 
-            // CASO A: Flujo con parámetros desde la llamada de voz (Handoff Activo)
+            // Configuración base estructural extraída de tu captura de pantalla
+            const deploymentOptions = {
+                deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
+                tokenBroker: {
+                    enableTokenBroker: true,
+                    enableRecaptcha: false
+                }
+            };
+
+            // CASO A: Venimos desde llamada telefónica (Handoff Activo)
             if (kycRequestId && customerDocId) {
                 
-                // Escuchamos el evento nativo para asegurar que la sesión con Dialogflow está abierta
+                // Registramos el contexto usando la factoría oficial ces de Google
+                chatSdk.registerContext(
+                    chatSdk.prebuilts.ces.createContext(deploymentOptions)
+                );
+
+                // Esperamos que la sesión conecte de forma segura para mandar los datos de la llamada
                 chatEl.addEventListener('df-session-started', () => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-                    console.log("Session verified active. Injecting payload:", kycPayload);
+                    console.log("Secure channel ready. Injected payload:", kycPayload);
                     
                     displayChatInterface();
 
-                    // Envío de query seguro evaluando las funciones disponibles del SDK actual
                     if (typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
-                        console.log("Payload sent via chatEl.sendQuery!");
                     } else if (typeof chatEl.sendMessage === 'function') {
                         chatEl.sendMessage({ text: kycPayload });
-                        console.log("Payload sent via chatEl.sendMessage!");
                     }
-                }, { once: true }); // Evita disparos duplicados al resetear sesión
+                }, { once: true });
 
-            // CASO B: Flujo de usuario estándar (Entrada directa por URL limpia)
+            // CASO B: Entrada normal de usuario (Llegada directa sin params)
             } else {
-                console.warn("No parameters found in URL. Operating in standard user mode.");
+                console.warn("Standard navigation mode active.");
                 
-                // Pasamos el session parameter directamente al elemento del DOM
-                chatEl.sessionParameters = { "is_voice_handoff": false };
+                // Agregamos el parámetro de sesión directamente en las opciones antes de crear el contexto
+                deploymentOptions.sessionParameters = { "is_voice_handoff": false };
+                
+                chatSdk.registerContext(
+                    chatSdk.prebuilts.ces.createContext(deploymentOptions)
+                );
                 
                 displayChatInterface();
             }
