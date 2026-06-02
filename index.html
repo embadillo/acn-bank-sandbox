@@ -65,62 +65,71 @@
         const urlParams = new URLSearchParams(window.location.search);
         const kycRequestId = urlParams.get('kyc_request_id');
         const customerDocId = urlParams.get('customer_doc_id');
-
+        
         console.log("=== KYC Parameters Detected ===");
         console.log("KYC Request ID:", kycRequestId);
         console.log("Customer Doc ID:", customerDocId);
 
         window.addEventListener("chat-messenger-loaded", () => {
-            console.log("Widget loaded. Registering context...");
+            console.log("Widget loaded. Checking handoff context...");
 
-            // Context del deployment oficial — tokenBroker ya habilitado
+            // Determinamos dinámicamente si viene de una llamada de voz (Caso A) o directo por URL (Caso B)
+            const isVoiceHandoff = !!(kycRequestId && customerDocId);
+            console.log("Is Voice Handoff Active?:", isVoiceHandoff);
+
+            // Registramos el contexto en Dialogflow enviando el parámetro correcto
             chatSdk.registerContext(
                 chatSdk.prebuilts.ces.createContext({
                     deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
                     tokenBroker: {
                         enableTokenBroker: true,
                         enableRecaptcha: false
+                    },
+                    sessionParameters: {
+                        "is_voice_handoff": isVoiceHandoff
                     }
                 }),
             );
 
-            if (kycRequestId && customerDocId) {
+            const chatEl = document.querySelector('chat-messenger');
+            const loadingScreen = document.getElementById('loadingScreen');
+
+            // Función común para desplegar el widget
+            const showChatUI = () => {
+                if (chatEl) {
+                    chatEl.style.display = 'block';
+                    if (typeof chatEl.openChat === 'function') chatEl.openChat();
+                    else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
+                    else chatEl.setAttribute('open', 'true');
+                }
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
+            };
+
+            // CASO A: Flujo con parámetros de voz activos
+            if (isVoiceHandoff) {
                 setTimeout(() => {
                     const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
                     console.log("Injecting KYC payload:", kycPayload);
-
-                    const chatEl = document.querySelector('chat-messenger');
-                    const loadingScreen = document.getElementById('loadingScreen');
-
-                    if (chatEl) {
-                        chatEl.style.display = 'block';
-
-                        if (typeof chatEl.openChat === 'function') chatEl.openChat();
-                        else if (typeof chatEl.expandChatWindow === 'function') chatEl.expandChatWindow();
-                        else chatEl.setAttribute('open', 'true');
-
-                        if (loadingScreen) loadingScreen.style.display = 'none';
-                    }
+                    
+                    showChatUI();
 
                     if (chatEl && typeof chatEl.sendQuery === 'function') {
                         chatEl.sendQuery(kycPayload);
                         console.log("Payload sent via sendQuery.");
                     } else if (chatEl && typeof chatEl.sendMessage === 'function') {
                         chatEl.sendMessage({ text: kycPayload });
+                        console.log("Payload sent via sendMessage.");
                     }
-
                 }, 1500);
 
+            // CASO B: Flujo estándar desde la web
             } else {
-                // Caso B — navegación estándar, mostrar widget normalmente
-                console.warn("No KYC params. Standard mode.");
-                const chatEl = document.querySelector('chat-messenger');
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (chatEl) chatEl.style.display = 'block';
-                if (loadingScreen) loadingScreen.style.display = 'none';
+                console.warn("No KYC params detected. Launching in standard user mode.");
+                showChatUI();
             }
         });
     </script>
-
 </body>
 </html>
