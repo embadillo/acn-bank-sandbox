@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Banco Santander</title>
+  <title>ACN Bank - Virtual Assistant</title>
+
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -50,8 +52,7 @@
       chat-title="ACN Bank Demo"
       chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
       enable-file-upload
-      enable-audio-input
-      rich-text-rendering-enabled>  <!-- <<-- AQUÍ ESTÁ LA NUEVA LÍNEA PARA EL FORMATO DE TEXTO -->
+      enable-audio-input>
       <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
       <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
       <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
@@ -65,7 +66,9 @@
        Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
        Replace with supported SDK action handling when available.
     ====================================================================== */
+
     window.ACN_WIDGET_REGISTRY = {};
+
     const urlParams = new URLSearchParams(window.location.search);
     const kycRequestId = urlParams.get("r") || urlParams.get("kyc_request_id");
     const customerDocId = urlParams.get("c") || urlParams.get("customer_doc_id");
@@ -157,9 +160,117 @@
       return { chat, chatContainer, userInput, messageList, textarea, sendBtn };
     }
 
+    /* ======================================================================
+       MARKDOWN RENDERER
+       Converts agent markdown to HTML. Applied as a DOM post-process pass
+       after each response since the SDK renders text as plain strings.
+    ====================================================================== */
+
+    function renderMarkdown(raw) {
+      let html = raw;
+
+      // Tables — must run before bold/italic to avoid mangling pipe chars
+      html = html.replace(
+        /^\|(.+)\|\s*\n\|[-| :]+\|\s*\n((?:\|.+\|\s*?\n?)+)/gm,
+        (match, header, rows) => {
+          const ths = header.split("|").filter(Boolean).map(h =>
+            `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h.trim()}</th>`
+          ).join("");
+          const trs = rows.trim().split("\n").map(row => {
+            const tds = row.split("|").filter(Boolean).map(d =>
+              `<td style="padding:7px 12px;border:1px solid #e0e4ea;font-size:13px;">${d.trim()}</td>`
+            ).join("");
+            return `<tr>${tds}</tr>`;
+          }).join("");
+          return `<table style="border-collapse:collapse;width:100%;margin:8px 0;border-radius:8px;overflow:hidden;">`
+            + (ths ? `<thead><tr>${ths}</tr></thead>` : "")
+            + `<tbody>${trs}</tbody></table>`;
+        }
+      );
+
+      // Bold
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      // Italic (single asterisk, not touching bold)
+      html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+      // Inline code
+      html = html.replace(/`([^`]+)`/g,
+        `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
+      );
+
+      // Unordered lists — collect consecutive list lines into a single <ul>
+      html = html.replace(/((?:^[\*\-] .+\n?)+)/gm, block => {
+        const items = block.trim().split("\n").map(line =>
+          `<li style="margin:3px 0;">${line.replace(/^[\*\-] /, "").trim()}</li>`
+        ).join("");
+        return `<ul style="margin:6px 0;padding-left:18px;">${items}</ul>`;
+      });
+
+      // Ordered lists
+      html = html.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
+        const items = block.trim().split("\n").map(line =>
+          `<li style="margin:3px 0;">${line.replace(/^\d+\. /, "").trim()}</li>`
+        ).join("");
+        return `<ol style="margin:6px 0;padding-left:18px;">${items}</ol>`;
+      });
+
+      // Line breaks (only outside block elements we already converted)
+      html = html.replace(/\n/g, "<br>");
+
+      return html;
+    }
+
+    /* Candidate selectors to try across SDK versions — first match wins */
+    const MD_SELECTORS = [
+      ".message-text",
+      ".bot-message .text",
+      ".bot-message p",
+      ".response-text",
+      ".chat-message--bot .message",
+      "df-messenger-message p",
+      "chat-messenger-message p",
+      ".message p",
+      "p"  // broad fallback scoped to message-list shadow root
+    ];
+
+    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|[-| :]+\|/;
+
+    function patchMarkdownInShadow(root) {
+      if (!root) return;
+      for (const selector of MD_SELECTORS) {
+        const els = root.querySelectorAll(`${selector}:not([data-md-done])`);
+        if (els.length === 0) continue;
+        els.forEach(el => {
+          const raw = el.innerText ?? el.textContent ?? "";
+          if (MD_HAS_SYNTAX.test(raw)) {
+            el.innerHTML = renderMarkdown(raw);
+            el.setAttribute("data-md-done", "true");
+          }
+        });
+        // If we matched at least one element with this selector, stop trying others
+        if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
+      }
+
+      // Also recurse into any nested shadow roots (e.g. individual message components)
+      const all = root.querySelectorAll("*");
+      all.forEach(el => {
+        if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
+      });
+    }
+
+    function patchAllMarkdown() {
+      const { messageList } = getChatParts();
+      if (!messageList) return;
+      // Try the message-list element itself and its shadow root
+      patchMarkdownInShadow(messageList);
+      if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
+    }
+
+    /* ====================================================================== */
+
     function buildPaymentCarousel(payload) {
       const payments = payload.payments || [];
       const wid = registerWidget(payments);
+
       const cards = payments.map((p, index) => {
         const status = (p.status || "").toLowerCase();
         const badgeClass = status === "processing" ? "acn-badge-processing" : status === "cancelled" ? "acn-badge-cancelled" : "acn-badge-scheduled";
@@ -168,14 +279,17 @@
         const iconHtml = logoUrl
           ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(p.payee_name)}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;pointer-events:none;">`
           : `<span style="font-size:20px;pointer-events:none;">${getPayeeEmoji(p.payee_name)}</span>`;
+
         const badgeColors = {
           "acn-badge-scheduled": "background:#e7f3e8;color:#2d6a2f;",
           "acn-badge-processing": "background:#fef3cd;color:#8a5a00;",
           "acn-badge-cancelled": "background:#fde8e8;color:#9b1c1c;"
         };
+
         const btnHtml = p.cancellable
           ? `<div class="acn-action-cancel" style="width:100%;padding:9px 0;border:1px solid #b9c1cf;border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:#1a1a2e;cursor:pointer;margin-top:auto;text-align:center;display:flex;justify-content:center;transition:background 0.15s,border-color 0.15s;position:relative;z-index:20;pointer-events:auto;">${escapeHtml(p.cta_label || "Cancel payment")}</div>`
           : `<div class="acn-action-cancel acn-disabled" style="width:100%;padding:9px 0;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:500;color:#9ca3af;cursor:default;pointer-events:none;text-align:center;display:flex;justify-content:center;margin-top:auto;position:relative;z-index:20;">${escapeHtml(p.cta_label || badgeLabel)}</div>`;
+
         return `
           <div class="acn-card acn-item-${index}" style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:16px;width:220px;flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;position:relative;">
             <div style="display:flex;align-items:center;gap:10px;min-height:48px;pointer-events:none;">
@@ -188,14 +302,17 @@
             ${btnHtml}
           </div>`;
       }).join("");
+
       const leftArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;">
           <div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-right:3px;pointer-events:auto;">❮</div>
         </div>` : "";
+
       const rightArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;">
           <div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-left:3px;pointer-events:auto;">❯</div>
         </div>` : "";
+
       return `
         <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;overflow:hidden;padding:5px 0;">
           <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📅 ${escapeHtml(payload.title || "Upcoming scheduled payments")}</div>
@@ -264,6 +381,7 @@
     function deepQuerySelector(selector, root = document) {
       const found = root.querySelector?.(selector);
       if (found) return found;
+
       const all = root.querySelectorAll?.("*") || [];
       for (const el of all) {
         if (el.shadowRoot) {
@@ -277,34 +395,41 @@
     function setNativeValue(element, value) {
       const prototype = Object.getPrototypeOf(element);
       const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
       if (valueSetter) valueSetter.call(element, value);
       else element.value = value;
     }
 
     function acnSendMessage(text) {
       const chat = document.querySelector("chat-messenger");
+
       try {
         const textarea =
           deepQuerySelector("textarea") ||
           deepQuerySelector("input[type='text']") ||
           deepQuerySelector("input");
+
         if (!textarea) {
           console.warn("No textarea/input found inside Shadow DOM");
           if (chat?.sendQuery) chat.sendQuery(text);
           return;
         }
+
         textarea.focus();
         setNativeValue(textarea, text);
+
         textarea.dispatchEvent(new InputEvent("input", {
           bubbles: true,
           composed: true,
           inputType: "insertText",
           data: text
         }));
+
         textarea.dispatchEvent(new Event("change", {
           bubbles: true,
           composed: true
         }));
+
         setTimeout(() => {
           textarea.dispatchEvent(new KeyboardEvent("keydown", {
             key: "Enter",
@@ -314,15 +439,18 @@
             bubbles: true,
             composed: true
           }));
+
           const sendBtn =
             deepQuerySelector("button[aria-label='Send']") ||
             deepQuerySelector("button[title='Send']") ||
             deepQuerySelector(".send-icon") ||
             deepQuerySelector("button");
+
           if (sendBtn && !sendBtn.disabled) {
             sendBtn.click();
           }
         }, 150);
+
       } catch (err) {
         console.warn("Visible send failed. Falling back to silent sendQuery.", err);
         if (chat?.sendQuery) chat.sendQuery(text);
@@ -371,6 +499,7 @@
     function handleWidgetInteractions(e) {
       const path = e.composedPath ? e.composedPath() : [];
       const findInPath = (cls) => path.find(el => el.classList && el.classList.contains(cls));
+
       const arrowBtn = findInPath("acn-arrow-btn");
       if (arrowBtn) {
         e.preventDefault();
@@ -386,6 +515,7 @@
         }
         return;
       }
+
       const cancelBtn = findInPath("acn-action-cancel");
       if (cancelBtn && !cancelBtn.classList.contains("acn-disabled")) {
         e.preventDefault();
@@ -408,6 +538,7 @@
         }
         return;
       }
+
       const selectBtn = findInPath("acn-action-select");
       if (selectBtn) {
         e.preventDefault();
@@ -429,15 +560,12 @@
 
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
-      
+
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext({
           deploymentName: "projects/483471568825/locations/us/apps/27be6c70-74dc-4e50-a3e8-25b032e7c965/deployments/7cbb68f9-147f-4698-be02-e7ea5fa5d1a3",
           tokenBroker: { enableTokenBroker: true, enableRecaptcha: false },
-          sessionParameters: { 
-            "is_voice_handoff": isVoiceHandoff,
-            "telephony-caller-id": null // <-- CORRECCIÓN PARA WIDGETS
-          }
+          sessionParameters: { "is_voice_handoff": isVoiceHandoff }
         })
       );
 
@@ -467,6 +595,11 @@
             });
           });
         });
+
+        // Patch markdown in bot text responses
+        setTimeout(patchAllMarkdown, 250);
+        setTimeout(patchAllMarkdown, 700);
+
         setTimeout(bindCarouselScrollListeners, 150);
         setTimeout(bindCarouselScrollListeners, 500);
       });
