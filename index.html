@@ -166,32 +166,103 @@
        after each response since the SDK renders text as plain strings.
     ====================================================================== */
 
-    function renderMarkdown(raw) {
-      let html = raw;
+    function normalizeFlattenedMarkdownTables(text) {
+      // Some SDK render paths collapse newlines, producing:
+      // "Intro text | H1 | H2 | | :--- | :--- | | A | B | Outro"
+      // This restores line breaks around likely Markdown table rows.
+      let value = String(text ?? "");
 
-      // Tables — must run before bold/italic to avoid mangling pipe chars
-      html = html.replace(
-        /^\|(.+)\|\s*\n\|[-| :]+\|\s*\n((?:\|.+\|\s*?\n?)+)/gm,
-        (match, header, rows) => {
-          const ths = header.split("|").filter(Boolean).map(h =>
-            `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h.trim()}</th>`
-          ).join("");
-          const trs = rows.trim().split("\n").map(row => {
-            const tds = row.split("|").filter(Boolean).map(d =>
-              `<td style="padding:7px 12px;border:1px solid #e0e4ea;font-size:13px;">${d.trim()}</td>`
-            ).join("");
-            return `<tr>${tds}</tr>`;
-          }).join("");
-          return `<table style="border-collapse:collapse;width:100%;margin:8px 0;border-radius:8px;overflow:hidden;">`
-            + (ths ? `<thead><tr>${ths}</tr></thead>` : "")
-            + `<tbody>${trs}</tbody></table>`;
+      // Fast exit when there is no table-ish syntax.
+      if (!/\|\s*:?-{3,}:?\s*\|/.test(value) && !/\|\s*[-: ]{3,}\s*\|/.test(value)) {
+        return value;
+      }
+
+      // Put a newline before the first table row if it follows normal prose.
+      value = value.replace(/([^\n])\s+(\|\s*[^\n|]+\s*\|\s*[^\n|]+\s*\|)/, "$1\n$2");
+
+      // Split rows that were flattened as: | ... | | ... |
+      value = value.replace(/\|\s+\|/g, "|\n|");
+
+      // Put a newline after the last table row when prose continues.
+      // Conservative: only after a row followed by a capitalized sentence starter.
+      value = value.replace(/(\|)\s+(As you can|Would you|Let me|I can|This|That|The|A|An)\b/g, "$1\n\n$2");
+
+      return value;
+    }
+
+    function looksLikeMarkdownTableRow(line) {
+      const trimmed = line.trim();
+      return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.split("|").length >= 3;
+    }
+
+    function isMarkdownSeparatorRow(line) {
+      return /^\s*\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line.trim());
+    }
+
+    function renderMarkdownTable(headerLine, separatorLine, bodyLines) {
+      const headers = headerLine.split("|").slice(1, -1).map(h => h.trim());
+      const rows = bodyLines
+        .filter(looksLikeMarkdownTableRow)
+        .map(row => row.split("|").slice(1, -1).map(cell => cell.trim()));
+
+      const ths = headers.map(h =>
+        `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h}</th>`
+      ).join("");
+
+      const trs = rows.map(cells => {
+        const tds = cells.map(d =>
+          `<td style="padding:7px 12px;border:1px solid #e0e4ea;font-size:13px;">${d}</td>`
+        ).join("");
+        return `<tr>${tds}</tr>`;
+      }).join("");
+
+      return `<div style="overflow-x:auto;width:100%;margin:8px 0;">`
+        + `<table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;">`
+        + `<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+    }
+
+    function renderMarkdownTablesByLines(text) {
+      const lines = text.split("\n");
+      const out = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        if (
+          i + 1 < lines.length &&
+          looksLikeMarkdownTableRow(lines[i]) &&
+          isMarkdownSeparatorRow(lines[i + 1])
+        ) {
+          const header = lines[i];
+          const separator = lines[i + 1];
+          const body = [];
+          i += 2;
+          while (i < lines.length && looksLikeMarkdownTableRow(lines[i])) {
+            body.push(lines[i]);
+            i += 1;
+          }
+          out.push(renderMarkdownTable(header, separator, body));
+        } else {
+          out.push(lines[i]);
+          i += 1;
         }
-      );
+      }
+
+      return out.join("\n");
+    }
+
+    function renderMarkdown(raw) {
+      let html = normalizeFlattenedMarkdownTables(raw);
+
+      // Escape first, then reintroduce only the markup we generate ourselves.
+      html = escapeHtml(html);
+
+      // Tables before inline formatting.
+      html = renderMarkdownTablesByLines(html);
 
       // Bold
       html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-      // Italic (single asterisk, not touching bold)
-      html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+      // Italic (single asterisk, not touching bold). Avoid lookbehind for browser compatibility.
+      html = html.replace(/(^|[^*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
       // Inline code
       html = html.replace(/`([^`]+)`/g,
         `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
@@ -213,8 +284,10 @@
         return `<ol style="margin:6px 0;padding-left:18px;">${items}</ol>`;
       });
 
-      // Line breaks (only outside block elements we already converted)
+      // Line breaks outside block-ish tags.
       html = html.replace(/\n/g, "<br>");
+      html = html.replace(/<br>\s*(<div style="overflow-x:auto;)/g, "$1");
+      html = html.replace(/(<\/div>)\s*<br>/g, "$1");
 
       return html;
     }
@@ -232,7 +305,7 @@
       "p"  // broad fallback scoped to message-list shadow root
     ];
 
-    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|[-| :]+\|/;
+    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
     function patchMarkdownInShadow(root) {
       if (!root) return;
@@ -242,6 +315,7 @@
         els.forEach(el => {
           const raw = el.innerText ?? el.textContent ?? "";
           if (MD_HAS_SYNTAX.test(raw)) {
+            console.log("ACN markdown raw:", JSON.stringify(raw));
             el.innerHTML = renderMarkdown(raw);
             el.setAttribute("data-md-done", "true");
           }
