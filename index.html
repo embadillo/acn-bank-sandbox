@@ -164,28 +164,35 @@
        MARKDOWN RENDERER
        Converts agent markdown to HTML. Applied as a DOM post-process pass
        after each response since the SDK renders text as plain strings.
+       Handles both normal text responses and audio transcripts where all
+       newlines are collapsed into a single line.
     ====================================================================== */
 
     function normalizeFlattenedMarkdownTables(text) {
-      // Some SDK render paths collapse newlines, producing:
-      // "Intro text | H1 | H2 | | :--- | :--- | | A | B | Outro"
-      // This restores line breaks around likely Markdown table rows.
+      // Audio transcripts collapse all newlines, producing a single line like:
+      // "Intro | Card | Pros | Cons | | :--- | :--- | :--- | | Row1 | ... | Outro"
+      // This function restores line breaks so the table parser can work.
       let value = String(text ?? "");
 
-      // Fast exit when there is no table-ish syntax.
-      if (!/\|\s*:?-{3,}:?\s*\|/.test(value) && !/\|\s*[-: ]{3,}\s*\|/.test(value)) {
-        return value;
-      }
+      // Fast exit: no pipe syntax at all
+      if (!value.includes("|")) return value;
 
-      // Put a newline before the first table row if it follows normal prose.
-      value = value.replace(/([^\n])\s+(\|\s*[^\n|]+\s*\|\s*[^\n|]+\s*\|)/, "$1\n$2");
-
-      // Split rows that were flattened as: | ... | | ... |
+      // Step 1: Split all flattened rows — "| ... | | ... |" → "| ... |\n| ... |"
+      // This is the core fix for the audio transcript case.
       value = value.replace(/\|\s+\|/g, "|\n|");
 
-      // Put a newline after the last table row when prose continues.
-      // Conservative: only after a row followed by a capitalized sentence starter.
-      value = value.replace(/(\|)\s+(As you can|Would you|Let me|I can|This|That|The|A|An)\b/g, "$1\n\n$2");
+      // Step 2: Detach any leading prose from the first table row.
+      // e.g. "Here is a breakdown: | Card |..." → "Here is a breakdown:\n| Card |..."
+      value = value.replace(/([^|\n])\s+(\|[^\n]+\|)/g, (match, pre, tableRow) => {
+        if ((tableRow.match(/\|/g) || []).length >= 2) {
+          return pre + "\n" + tableRow;
+        }
+        return match;
+      });
+
+      // Step 3: Detach trailing prose from the last table row.
+      // e.g. "| cell | Let me know..." → "| cell |\nLet me know..."
+      value = value.replace(/(\|)\s+([A-Z][^|])/g, "$1\n$2");
 
       return value;
     }
@@ -302,7 +309,7 @@
       "df-messenger-message p",
       "chat-messenger-message p",
       ".message p",
-      "p"  // broad fallback scoped to message-list shadow root
+      "p"
     ];
 
     const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
@@ -320,11 +327,10 @@
             el.setAttribute("data-md-done", "true");
           }
         });
-        // If we matched at least one element with this selector, stop trying others
         if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
       }
 
-      // Also recurse into any nested shadow roots (e.g. individual message components)
+      // Recurse into nested shadow roots
       const all = root.querySelectorAll("*");
       all.forEach(el => {
         if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
@@ -334,7 +340,6 @@
     function patchAllMarkdown() {
       const { messageList } = getChatParts();
       if (!messageList) return;
-      // Try the message-list element itself and its shadow root
       patchMarkdownInShadow(messageList);
       if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
     }
@@ -469,7 +474,6 @@
     function setNativeValue(element, value) {
       const prototype = Object.getPrototypeOf(element);
       const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
-
       if (valueSetter) valueSetter.call(element, value);
       else element.value = value;
     }
@@ -493,36 +497,21 @@
         setNativeValue(textarea, text);
 
         textarea.dispatchEvent(new InputEvent("input", {
-          bubbles: true,
-          composed: true,
-          inputType: "insertText",
-          data: text
+          bubbles: true, composed: true, inputType: "insertText", data: text
         }));
-
-        textarea.dispatchEvent(new Event("change", {
-          bubbles: true,
-          composed: true
-        }));
+        textarea.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
 
         setTimeout(() => {
           textarea.dispatchEvent(new KeyboardEvent("keydown", {
-            key: "Enter",
-            code: "Enter",
-            keyCode: 13,
-            which: 13,
-            bubbles: true,
-            composed: true
+            key: "Enter", code: "Enter", keyCode: 13, which: 13,
+            bubbles: true, composed: true
           }));
-
           const sendBtn =
             deepQuerySelector("button[aria-label='Send']") ||
             deepQuerySelector("button[title='Send']") ||
             deepQuerySelector(".send-icon") ||
             deepQuerySelector("button");
-
-          if (sendBtn && !sendBtn.disabled) {
-            sendBtn.click();
-          }
+          if (sendBtn && !sendBtn.disabled) sendBtn.click();
         }, 150);
 
       } catch (err) {
