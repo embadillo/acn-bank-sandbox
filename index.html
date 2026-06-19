@@ -44,12 +44,14 @@
     <h2>Connecting to ACN Bank secure channel...</h2>
     <p>Please wait while we transfer your verification session.</p>
   </div>
+
   <chat-messenger url-allowlist="*">
     <chat-messenger-container
       chat-title="ACN Bank Demo"
       chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
       enable-file-upload
-      enable-audio-input>
+      enable-audio-input
+      rich-text-rendering-enabled>  <!-- <<-- AQUÍ ESTÁ LA NUEVA LÍNEA PARA EL FORMATO DE TEXTO -->
       <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
       <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
       <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
@@ -434,7 +436,7 @@
           tokenBroker: { enableTokenBroker: true, enableRecaptcha: false },
           sessionParameters: { 
             "is_voice_handoff": isVoiceHandoff,
-            "telephony-caller-id": null 
+            "telephony-caller-id": null // <-- CORRECCIÓN PARA WIDGETS
           }
         })
       );
