@@ -82,6 +82,34 @@
       "toronto property tax":  BASE + "Captura%20de%20pantalla%202026-06-07%20141855.png"
     };
 
+    /* ======================================================================
+       SANITIZER
+       Gemini Live (gemini-3.1-flash-live) sometimes encodes double-quote
+       characters as <ctrl46> inside nested tool call argument payloads when
+       the input context is large (~20k+ tokens). This happens at the
+       tokenizer level and is not a model instruction issue.
+
+       This function intercepts raw toolCall.args before any render function
+       touches the payload, converts any <ctrlNN> sequences back to their
+       ASCII equivalents, and re-parses the JSON. If the JSON is already
+       clean the stringify/parse round-trip is a no-op.
+    ====================================================================== */
+
+    function sanitizeLiveArgs(args) {
+      if (!args || typeof args !== "object") return args;
+      try {
+        const cleaned = JSON.stringify(args).replace(/<ctrl(\d+)>/g, (_, n) =>
+          String.fromCharCode(parseInt(n, 10))
+        );
+        return JSON.parse(cleaned);
+      } catch (e) {
+        console.warn("ACN sanitizeLiveArgs: failed to clean args, returning original", e);
+        return args;
+      }
+    }
+
+    /* ====================================================================== */
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -169,31 +197,16 @@
     ====================================================================== */
 
     function normalizeFlattenedMarkdownTables(text) {
-      // Audio transcripts collapse all newlines, producing a single line like:
-      // "Intro | Card | Pros | Cons | | :--- | :--- | :--- | | Row1 | ... | Outro"
-      // This function restores line breaks so the table parser can work.
       let value = String(text ?? "");
-
-      // Fast exit: no pipe syntax at all
       if (!value.includes("|")) return value;
-
-      // Step 1: Split all flattened rows — "| ... | | ... |" → "| ... |\n| ... |"
-      // This is the core fix for the audio transcript case.
       value = value.replace(/\|\s+\|/g, "|\n|");
-
-      // Step 2: Detach any leading prose from the first table row.
-      // e.g. "Here is a breakdown: | Card |..." → "Here is a breakdown:\n| Card |..."
       value = value.replace(/([^|\n])\s+(\|[^\n]+\|)/g, (match, pre, tableRow) => {
         if ((tableRow.match(/\|/g) || []).length >= 2) {
           return pre + "\n" + tableRow;
         }
         return match;
       });
-
-      // Step 3: Detach trailing prose from the last table row.
-      // e.g. "| cell | Let me know..." → "| cell |\nLet me know..."
       value = value.replace(/(\|)\s+([A-Z][^|])/g, "$1\n$2");
-
       return value;
     }
 
@@ -259,47 +272,31 @@
 
     function renderMarkdown(raw) {
       let html = normalizeFlattenedMarkdownTables(raw);
-
-      // Escape first, then reintroduce only the markup we generate ourselves.
       html = escapeHtml(html);
-
-      // Tables before inline formatting.
       html = renderMarkdownTablesByLines(html);
-
-      // Bold
       html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-      // Italic (single asterisk, not touching bold). Avoid lookbehind for browser compatibility.
       html = html.replace(/(^|[^*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
-      // Inline code
       html = html.replace(/`([^`]+)`/g,
         `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
       );
-
-      // Unordered lists — collect consecutive list lines into a single <ul>
       html = html.replace(/((?:^[\*\-] .+\n?)+)/gm, block => {
         const items = block.trim().split("\n").map(line =>
           `<li style="margin:3px 0;">${line.replace(/^[\*\-] /, "").trim()}</li>`
         ).join("");
         return `<ul style="margin:6px 0;padding-left:18px;">${items}</ul>`;
       });
-
-      // Ordered lists
       html = html.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
         const items = block.trim().split("\n").map(line =>
           `<li style="margin:3px 0;">${line.replace(/^\d+\. /, "").trim()}</li>`
         ).join("");
         return `<ol style="margin:6px 0;padding-left:18px;">${items}</ol>`;
       });
-
-      // Line breaks outside block-ish tags.
       html = html.replace(/\n/g, "<br>");
       html = html.replace(/<br>\s*(<div style="overflow-x:auto;)/g, "$1");
       html = html.replace(/(<\/div>)\s*<br>/g, "$1");
-
       return html;
     }
 
-    /* Candidate selectors to try across SDK versions — first match wins */
     const MD_SELECTORS = [
       ".message-text",
       ".bot-message .text",
@@ -329,8 +326,6 @@
         });
         if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
       }
-
-      // Recurse into nested shadow roots
       const all = root.querySelectorAll("*");
       all.forEach(el => {
         if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
@@ -460,7 +455,6 @@
     function deepQuerySelector(selector, root = document) {
       const found = root.querySelector?.(selector);
       if (found) return found;
-
       const all = root.querySelectorAll?.("*") || [];
       for (const el of all) {
         if (el.shadowRoot) {
@@ -480,7 +474,6 @@
 
     function acnSendMessage(text) {
       const chat = document.querySelector("chat-messenger");
-
       try {
         const textarea =
           deepQuerySelector("textarea") ||
@@ -495,7 +488,6 @@
 
         textarea.focus();
         setNativeValue(textarea, text);
-
         textarea.dispatchEvent(new InputEvent("input", {
           bubbles: true, composed: true, inputType: "insertText", data: text
         }));
@@ -644,10 +636,16 @@
             chunks.forEach(chunk => {
               const toolCall = chunk.toolCall;
               if (!toolCall) return;
-              const toolName = toolCall.displayName || toolCall.name || "";
-              const payload = toolCall.args?.payload;
+
+              // ── SANITIZER ────────────────────────────────────────────────
+              // Gemini Live encodes quotes as <ctrl46> in large-context turns.
+              // sanitizeLiveArgs normalizes the args before any render touches them.
+              const cleanArgs = sanitizeLiveArgs(toolCall.args);
+              const payload = cleanArgs?.payload;
+              // ─────────────────────────────────────────────────────────────
+
               if (!payload) return;
-              const widgetName = payload.name || toolName;
+              const widgetName = payload.name || toolCall.displayName || toolCall.name || "";
               if (widgetName === "acn-payment-carousel") {
                 chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
               } else if (widgetName === "acn-payee-selector") {
@@ -659,10 +657,8 @@
           });
         });
 
-        // Patch markdown in bot text responses
         setTimeout(patchAllMarkdown, 250);
         setTimeout(patchAllMarkdown, 700);
-
         setTimeout(bindCarouselScrollListeners, 150);
         setTimeout(bindCarouselScrollListeners, 500);
       });
