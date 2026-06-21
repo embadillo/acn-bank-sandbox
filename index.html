@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ACN Bank - Virtual Assistant</title>
+
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -40,7 +42,6 @@
   </style>
 </head>
 <body>
-
   <div id="loadingScreen" class="loading-container">
     <h2>Connecting to ACN Bank secure channel...</h2>
     <p>Please wait while we transfer your verification session.</p>
@@ -65,12 +66,14 @@
        Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
        Replace with supported SDK action handling when available.
     ====================================================================== */
+
     window.ACN_WIDGET_REGISTRY = {};
+
     const urlParams = new URLSearchParams(window.location.search);
     const kycRequestId = urlParams.get("r") || urlParams.get("kyc_request_id");
     const customerDocId = urlParams.get("c") || urlParams.get("customer_doc_id");
+
     const BASE = "https://raw.githubusercontent.com/embadillo/acn-bank-assets/refs/heads/main/";
-    
     const PAYEE_LOGOS = {
       "hydro one":             BASE + "Hydro-Logo-from-web-558.jpeg",
       "rogers communications": BASE + "rogerssocial-1.jpg",
@@ -85,11 +88,13 @@
        characters as <ctrl46> inside nested tool call argument payloads when
        the input context is large (~20k+ tokens). This happens at the
        tokenizer level and is not a model instruction issue.
+
        This function intercepts raw toolCall.args before any render function
        touches the payload, converts any <ctrlNN> sequences back to their
        ASCII equivalents, and re-parses the JSON. If the JSON is already
        clean the stringify/parse round-trip is a no-op.
     ====================================================================== */
+
     function sanitizeLiveArgs(args) {
       if (!args || typeof args !== "object") return args;
       try {
@@ -104,6 +109,7 @@
     }
 
     /* ====================================================================== */
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -183,23 +189,24 @@
     }
 
     /* ======================================================================
-       MARKDOWN RENDERER (CON FIX DE AUDIO ROBUSTECIDO)
+       MARKDOWN RENDERER
+       Converts agent markdown to HTML. Applied as a DOM post-process pass
+       after each response since the SDK renders text as plain strings.
+       Handles both normal text responses and audio transcripts where all
+       newlines are collapsed into a single line.
     ====================================================================== */
+
     function normalizeFlattenedMarkdownTables(text) {
       let value = String(text ?? "");
       if (!value.includes("|")) return value;
-      
-      // FIX AUDIO: Detecta tuberías pegadas o con espacios causadas por el colapso del STT
-      value = value.replace(/\|\s*\|/g, "|\n|");
-      
+      value = value.replace(/\|\s+\|/g, "|\n|");
       value = value.replace(/([^|\n])\s+(\|[^\n]+\|)/g, (match, pre, tableRow) => {
         if ((tableRow.match(/\|/g) || []).length >= 2) {
           return pre + "\n" + tableRow;
         }
         return match;
       });
-      // Separar títulos de tabla que queden pegados al texto anterior sin nueva línea
-      value = value.replace(/([a-zA-Z0-9.,?!])\s+(\|)/g, "$1\n$2");
+      value = value.replace(/(\|)\s+([A-Z][^|])/g, "$1\n$2");
       return value;
     }
 
@@ -238,6 +245,7 @@
       const lines = text.split("\n");
       const out = [];
       let i = 0;
+
       while (i < lines.length) {
         if (
           i + 1 < lines.length &&
@@ -258,6 +266,7 @@
           i += 1;
         }
       }
+
       return out.join("\n");
     }
 
@@ -300,11 +309,8 @@
       "p"
     ];
 
-    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s*\|/;
+    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
-    /* ======================================================================
-       RECURSIVE SHADOW DOM PATCHER (CONSERVANDO SELECTORES ORIGINALES)
-    ====================================================================== */
     function patchMarkdownInShadow(root) {
       if (!root) return;
       for (const selector of MD_SELECTORS) {
@@ -334,9 +340,11 @@
     }
 
     /* ====================================================================== */
+
     function buildPaymentCarousel(payload) {
       const payments = payload.payments || [];
       const wid = registerWidget(payments);
+
       const cards = payments.map((p, index) => {
         const status = (p.status || "").toLowerCase();
         const badgeClass = status === "processing" ? "acn-badge-processing" : status === "cancelled" ? "acn-badge-cancelled" : "acn-badge-scheduled";
@@ -345,14 +353,17 @@
         const iconHtml = logoUrl
           ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(p.payee_name)}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;pointer-events:none;">`
           : `<span style="font-size:20px;pointer-events:none;">${getPayeeEmoji(p.payee_name)}</span>`;
+
         const badgeColors = {
           "acn-badge-scheduled": "background:#e7f3e8;color:#2d6a2f;",
           "acn-badge-processing": "background:#fef3cd;color:#8a5a00;",
           "acn-badge-cancelled": "background:#fde8e8;color:#9b1c1c;"
         };
+
         const btnHtml = p.cancellable
           ? `<div class="acn-action-cancel" style="width:100%;padding:9px 0;border:1px solid #b9c1cf;border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:#1a1a2e;cursor:pointer;margin-top:auto;text-align:center;display:flex;justify-content:center;transition:background 0.15s,border-color 0.15s;position:relative;z-index:20;pointer-events:auto;">${escapeHtml(p.cta_label || "Cancel payment")}</div>`
           : `<div class="acn-action-cancel acn-disabled" style="width:100%;padding:9px 0;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:500;color:#9ca3af;cursor:default;pointer-events:none;text-align:center;display:flex;justify-content:center;margin-top:auto;position:relative;z-index:20;">${escapeHtml(p.cta_label || badgeLabel)}</div>`;
+
         return `
           <div class="acn-card acn-item-${index}" style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:16px;width:220px;flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;position:relative;">
             <div style="display:flex;align-items:center;gap:10px;min-height:48px;pointer-events:none;">
@@ -370,6 +381,7 @@
         <div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;">
           <div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-right:3px;pointer-events:auto;">❮</div>
         </div>` : "";
+
       const rightArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;">
           <div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-left:3px;pointer-events:auto;">❯</div>
@@ -407,7 +419,6 @@
             <div style="color:#1a56db;font-size:14px;pointer-events:none;">❯</div>
           </div>`;
       }).join("");
-
       return `
         <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
           <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">💳 ${escapeHtml(payload.title || "Your Saved Payees")}</div>
@@ -424,7 +435,6 @@
       const status = (payload.status || "success").toLowerCase();
       const statusColor = status === "cancelled" ? "#9b1c1c" : "#2d6a2f";
       const statusBg = status === "cancelled" ? "#fde8e8" : "#e7f3e8";
-
       return `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
           <div style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
@@ -493,9 +503,9 @@
             deepQuerySelector("button[title='Send']") ||
             deepQuerySelector(".send-icon") ||
             deepQuerySelector("button");
-          
           if (sendBtn && !sendBtn.disabled) sendBtn.click();
         }, 150);
+
       } catch (err) {
         console.warn("Visible send failed. Falling back to silent sendQuery.", err);
         if (chat?.sendQuery) chat.sendQuery(text);
@@ -509,7 +519,6 @@
       const rightArrowWrapper = root.querySelector(".acn-arrow-right-wrapper");
       const isAtStart = track.scrollLeft <= 5;
       const isAtEnd = track.scrollWidth - track.scrollLeft <= track.clientWidth + 5;
-      
       if (leftArrowWrapper) {
         leftArrowWrapper.style.opacity = isAtStart ? "0" : "1";
         leftArrowWrapper.style.pointerEvents = isAtStart ? "none" : "auto";
@@ -545,7 +554,7 @@
     function handleWidgetInteractions(e) {
       const path = e.composedPath ? e.composedPath() : [];
       const findInPath = (cls) => path.find(el => el.classList && el.classList.contains(cls));
-      
+
       const arrowBtn = findInPath("acn-arrow-btn");
       if (arrowBtn) {
         e.preventDefault();
@@ -571,7 +580,6 @@
         const index = getItemIndexFromClass(card);
         const widClass = Array.from(root?.classList || []).find(c => c.startsWith("w_"));
         const item = widClass ? getWidgetItems(widClass)[index] : null;
-        
         if (item) {
           cancelBtn.textContent = "Cancelled";
           cancelBtn.classList.add("acn-disabled");
@@ -580,7 +588,6 @@
           cancelBtn.style.borderColor = "#fca5a5";
           cancelBtn.style.pointerEvents = "none";
           cancelBtn.style.cursor = "default";
-          
           const cta = item.cta_value || `cancel_payment:${item.payment_id || item.payee_name}`;
           acnSendMessage(cta);
         }
@@ -595,7 +602,6 @@
         const index = getItemIndexFromClass(selectBtn);
         const widClass = Array.from(root?.classList || []).find(c => c.startsWith("w_"));
         const item = widClass ? getWidgetItems(widClass)[index] : null;
-        
         if (item) {
           selectBtn.style.background = "#f0f4ff";
           const cta = item.cta_value || `select_payee:${item.payee_id || item.payee_name}`;
@@ -609,7 +615,7 @@
 
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
-      
+
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext({
           deploymentName: "projects/483471568825/locations/us/apps/27be6c70-74dc-4e50-a3e8-25b032e7c965/deployments/7cbb68f9-147f-4698-be02-e7ea5fa5d1a3",
@@ -623,7 +629,6 @@
 
       chatEl.addEventListener("chat-messenger-response-received", (event) => {
         const outputs = event.detail?.raw?.outputs || [];
-        
         outputs.forEach(output => {
           const messages = output?.diagnosticInfo?.messages || [];
           messages.forEach(message => {
@@ -632,12 +637,15 @@
               const toolCall = chunk.toolCall;
               if (!toolCall) return;
 
+              // ── SANITIZER ────────────────────────────────────────────────
+              // Gemini Live encodes quotes as <ctrl46> in large-context turns.
+              // sanitizeLiveArgs normalizes the args before any render touches them.
               const cleanArgs = sanitizeLiveArgs(toolCall.args);
               const payload = cleanArgs?.payload;
+              // ─────────────────────────────────────────────────────────────
+
               if (!payload) return;
-
               const widgetName = payload.name || toolCall.displayName || toolCall.name || "";
-
               if (widgetName === "acn-payment-carousel") {
                 chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
               } else if (widgetName === "acn-payee-selector") {
@@ -649,8 +657,6 @@
           });
         });
 
-        // Tu flujo original de temporizadores para asegurar que no interfiera 
-        // con la renderización normal de los custom card de Google
         setTimeout(patchAllMarkdown, 250);
         setTimeout(patchAllMarkdown, 700);
         setTimeout(bindCarouselScrollListeners, 150);
