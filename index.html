@@ -297,46 +297,97 @@
       return html;
     }
 
-    const MD_SELECTORS = [
-      ".message-text",
-      ".bot-message .text",
-      ".bot-message p",
-      ".response-text",
-      ".chat-message--bot .message",
-      "df-messenger-message p",
-      "chat-messenger-message p",
-      ".message p",
-      "p"
-    ];
+    /* ======================================================================
+       SHADOW DOM TRAVERSAL (v1.16)
+       chat-messenger has 3 nested shadow roots before reaching message text.
+       Standard document.querySelector() cannot pierce shadow boundaries,
+       so we traverse manually: messenger → container → messageList → messages.
+    ====================================================================== */
 
     const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
-    function patchMarkdownInShadow(root) {
-      if (!root) return;
-      for (const selector of MD_SELECTORS) {
-        const els = root.querySelectorAll(`${selector}:not([data-md-done])`);
-        if (els.length === 0) continue;
-        els.forEach(el => {
-          const raw = el.innerText ?? el.textContent ?? "";
-          if (MD_HAS_SYNTAX.test(raw)) {
-            console.log("ACN markdown raw:", JSON.stringify(raw));
-            el.innerHTML = renderMarkdown(raw);
-            el.setAttribute("data-md-done", "true");
-          }
-        });
-        if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
-      }
-      const all = root.querySelectorAll("*");
-      all.forEach(el => {
-        if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
+    function getBotMessageElements() {
+      const messenger = document.querySelector("chat-messenger");
+      if (!messenger?.shadowRoot) return [];
+
+      // Shadow Root 1 — main container
+      const container =
+        messenger.shadowRoot.querySelector("chat-messenger-chat-bubble") ||
+        messenger.shadowRoot.querySelector("chat-messenger-container");
+      if (!container?.shadowRoot) return [];
+
+      // Shadow Root 2 — message list
+      const messageList =
+        container.shadowRoot.querySelector("chat-message-list") ||
+        container.shadowRoot.querySelector("df-message-list");
+      if (!messageList?.shadowRoot) return [];
+
+      // Shadow Root 3 — individual bot message elements
+      const messages = messageList.shadowRoot.querySelectorAll(
+        "chat-messenger-message, df-messenger-message"
+      );
+
+      const textNodes = [];
+      messages.forEach(msg => {
+        const isBot =
+          msg.getAttribute("actor") === "bot" ||
+          msg.classList.contains("bot-message") ||
+          !msg.hasAttribute("user");
+        if (!isBot || !msg.shadowRoot) return;
+        const el =
+          msg.shadowRoot.querySelector(".message-content") ||
+          msg.shadowRoot.querySelector(".text") ||
+          msg.shadowRoot.querySelector("p");
+        if (el) textNodes.push(el);
       });
+
+      return textNodes;
     }
 
     function patchAllMarkdown() {
-      const { messageList } = getChatParts();
-      if (!messageList) return;
-      patchMarkdownInShadow(messageList);
-      if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
+      getBotMessageElements().forEach(el => {
+        if (el.getAttribute("data-md-done")) return;
+        const raw = el.innerText ?? el.textContent ?? "";
+        if (MD_HAS_SYNTAX.test(raw)) {
+          console.log("ACN markdown raw:", JSON.stringify(raw));
+          el.innerHTML = renderMarkdown(raw);
+          el.setAttribute("data-md-done", "true");
+        }
+      });
+    }
+
+    /* ======================================================================
+       MUTATION OBSERVER
+       Fires immediately when a new message node lands in the shadow DOM —
+       no setTimeout guessing. Audio transcript responses (microphone) arrive
+       with collapsed newlines; normalizeFlattenedMarkdownTables() inside
+       renderMarkdown() handles restoring them before table parsing.
+    ====================================================================== */
+
+    let _mdObserver = null;
+
+    function initMarkdownObserver() {
+      if (_mdObserver) return;
+
+      const messenger = document.querySelector("chat-messenger");
+      if (!messenger?.shadowRoot) return;
+
+      const container =
+        messenger.shadowRoot.querySelector("chat-messenger-chat-bubble") ||
+        messenger.shadowRoot.querySelector("chat-messenger-container");
+      if (!container?.shadowRoot) return;
+
+      const messageList =
+        container.shadowRoot.querySelector("chat-message-list") ||
+        container.shadowRoot.querySelector("df-message-list");
+      if (!messageList?.shadowRoot) return;
+
+      _mdObserver = new MutationObserver((mutations) => {
+        if (mutations.some(m => m.addedNodes.length > 0)) patchAllMarkdown();
+      });
+
+      _mdObserver.observe(messageList.shadowRoot, { childList: true, subtree: true });
+      console.log("ACN MutationObserver attached to message list shadow root");
     }
 
     /* ====================================================================== */
@@ -657,11 +708,14 @@
           });
         });
 
-        setTimeout(patchAllMarkdown, 250);
-        setTimeout(patchAllMarkdown, 700);
+        // Carousel scroll bindings still use setTimeout (DOM render timing for custom cards)
         setTimeout(bindCarouselScrollListeners, 150);
         setTimeout(bindCarouselScrollListeners, 500);
       });
+
+      // MutationObserver replaces setTimeout-based patchAllMarkdown calls.
+      // Waits 1s after load for the SDK internal shadow DOM to be fully ready.
+      setTimeout(initMarkdownObserver, 1000);
 
       const showChatUI = () => {
         if (chatEl) {
