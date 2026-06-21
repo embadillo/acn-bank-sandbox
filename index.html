@@ -61,13 +61,16 @@
   <script>
     /* ======================================================================
        TEMPORARY DEMO WORKAROUND
+       The SDK sanitizer strips data-* attributes, ids, and button semantics.
+       Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
+       Replace with supported SDK action handling when available.
     ====================================================================== */
     window.ACN_WIDGET_REGISTRY = {};
     const urlParams = new URLSearchParams(window.location.search);
     const kycRequestId = urlParams.get("r") || urlParams.get("kyc_request_id");
     const customerDocId = urlParams.get("c") || urlParams.get("customer_doc_id");
-
     const BASE = "https://raw.githubusercontent.com/embadillo/acn-bank-assets/refs/heads/main/";
+    
     const PAYEE_LOGOS = {
       "hydro one":             BASE + "Hydro-Logo-from-web-558.jpeg",
       "rogers communications": BASE + "rogerssocial-1.jpg",
@@ -76,6 +79,17 @@
       "toronto property tax":  BASE + "Captura%20de%20pantalla%202026-06-07%20141855.png"
     };
 
+    /* ======================================================================
+       SANITIZER
+       Gemini Live (gemini-3.1-flash-live) sometimes encodes double-quote
+       characters as <ctrl46> inside nested tool call argument payloads when
+       the input context is large (~20k+ tokens). This happens at the
+       tokenizer level and is not a model instruction issue.
+       This function intercepts raw toolCall.args before any render function
+       touches the payload, converts any <ctrlNN> sequences back to their
+       ASCII equivalents, and re-parses the JSON. If the JSON is already
+       clean the stringify/parse round-trip is a no-op.
+    ====================================================================== */
     function sanitizeLiveArgs(args) {
       if (!args || typeof args !== "object") return args;
       try {
@@ -89,6 +103,7 @@
       }
     }
 
+    /* ====================================================================== */
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -147,54 +162,43 @@
       return Number.isFinite(index) ? index : -1;
     }
 
-    /* ======================================================================
-       SHADOW DOM PIERCER UTILS (NEW)
-       Permite buscar elementos ignorando la encapsulación del Shadow DOM
-    ====================================================================== */
-    function deepQuerySelector(selector, root = document) {
-      const found = root.querySelector?.(selector);
-      if (found) return found;
-      const all = root.querySelectorAll?.("*") || [];
-      for (const el of all) {
-        if (el.shadowRoot) {
-          const nested = deepQuerySelector(selector, el.shadowRoot);
-          if (nested) return nested;
-        }
-      }
-      return null;
-    }
-
-    function deepQuerySelectorAll(selector, root = document, results = []) {
-      const matches = root.querySelectorAll?.(selector) || [];
-      matches.forEach(m => results.push(m));
-      const all = root.querySelectorAll?.("*") || [];
-      for (const el of all) {
-        if (el.shadowRoot) {
-          deepQuerySelectorAll(selector, el.shadowRoot, results);
-        }
-      }
-      return results;
+    function getChatParts() {
+      const chat = document.querySelector("chat-messenger");
+      const chatContainer =
+        chat?.shadowRoot?.querySelector("df-messenger-chat") ||
+        chat?.shadowRoot?.querySelector("chat-messenger-chat");
+      const userInput =
+        chatContainer?.shadowRoot?.querySelector("df-messenger-user-input") ||
+        chatContainer?.shadowRoot?.querySelector("chat-messenger-user-input");
+      const messageList =
+        chatContainer?.shadowRoot?.querySelector("df-messenger-message-list") ||
+        chatContainer?.shadowRoot?.querySelector("chat-messenger-message-list");
+      const textarea =
+        userInput?.shadowRoot?.querySelector("textarea") ||
+        userInput?.shadowRoot?.querySelector("input");
+      const sendBtn =
+        userInput?.shadowRoot?.querySelector("button") ||
+        userInput?.shadowRoot?.querySelector(".send-icon");
+      return { chat, chatContainer, userInput, messageList, textarea, sendBtn };
     }
 
     /* ======================================================================
-       MARKDOWN RENDERER
+       MARKDOWN RENDERER (CON FIX DE AUDIO ROBUSTECIDO)
     ====================================================================== */
     function normalizeFlattenedMarkdownTables(text) {
       let value = String(text ?? "");
       if (!value.includes("|")) return value;
       
-      // FIX PARA TRANSCRIPCIONES DE VOZ:
-      // Cuando el STT comprime la tabla, las tuberías contiguas o separadas por espacio
-      // se convierten de nuevo en saltos de línea.
+      // FIX AUDIO: Detecta tuberías pegadas o con espacios causadas por el colapso del STT
       value = value.replace(/\|\s*\|/g, "|\n|");
       
-      value = value.replace(/([^\n])\s+(\|[^\|\n]+\|)/g, (match, pre, tableRow) => {
+      value = value.replace(/([^|\n])\s+(\|[^\n]+\|)/g, (match, pre, tableRow) => {
         if ((tableRow.match(/\|/g) || []).length >= 2) {
           return pre + "\n" + tableRow;
         }
         return match;
       });
-      // Separar texto del inicio de una tabla si el STT se comió el salto de línea previo
+      // Separar títulos de tabla que queden pegados al texto anterior sin nueva línea
       value = value.replace(/([a-zA-Z0-9.,?!])\s+(\|)/g, "$1\n$2");
       return value;
     }
@@ -284,56 +288,49 @@
       return html;
     }
 
+    const MD_SELECTORS = [
+      ".message-text",
+      ".bot-message .text",
+      ".bot-message p",
+      ".response-text",
+      ".chat-message--bot .message",
+      "df-messenger-message p",
+      "chat-messenger-message p",
+      ".message p",
+      "p"
+    ];
+
     const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s*\|/;
 
     /* ======================================================================
-       PATCHER Y OBSERVER DOM (NUEVA LÓGICA)
+       RECURSIVE SHADOW DOM PATCHER (CONSERVANDO SELECTORES ORIGINALES)
     ====================================================================== */
-    function patchAllMarkdown() {
-      // Usamos el deepQuerySelectorAll para atravesar los shadow roots y traer solo mensajes del bot
-      const botMessages = deepQuerySelectorAll('chat-messenger-message, df-messenger-message, .bot-message');
-      
-      botMessages.forEach(msg => {
-        if (msg.hasAttribute('user') || msg.getAttribute('actor') === 'user') return;
-        
-        const rootToSearch = msg.shadowRoot || msg;
-        // Obtenemos los nodos de texto de v1.16 que no tengan el flag de procesado
-        const textNodes = rootToSearch.querySelectorAll('.message-content:not([data-md-done]), .text:not([data-md-done]), p:not([data-md-done])');
-
-        textNodes.forEach(el => {
+    function patchMarkdownInShadow(root) {
+      if (!root) return;
+      for (const selector of MD_SELECTORS) {
+        const els = root.querySelectorAll(`${selector}:not([data-md-done])`);
+        if (els.length === 0) continue;
+        els.forEach(el => {
           const raw = el.innerText ?? el.textContent ?? "";
           if (MD_HAS_SYNTAX.test(raw)) {
+            console.log("ACN markdown raw:", JSON.stringify(raw));
             el.innerHTML = renderMarkdown(raw);
             el.setAttribute("data-md-done", "true");
           }
         });
+        if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
+      }
+      const all = root.querySelectorAll("*");
+      all.forEach(el => {
+        if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
       });
     }
 
-    function initShadowObserver() {
-      // Buscamos continuamente el contenedor de mensajes hasta que el widget termine de cargar su DOM
-      const checkInterval = setInterval(() => {
-        const messageLists = deepQuerySelectorAll('chat-message-list, df-message-list, df-messenger-message-list, chat-messenger-message-list');
-        
-        if (messageLists.length > 0) {
-          clearInterval(checkInterval);
-          const listRoot = messageLists[0].shadowRoot || messageLists[0];
-
-          // Observa adiciones de mensajes o cambios de texto (streaming / voz)
-          const observer = new MutationObserver((mutations) => {
-            clearTimeout(window._mdPatchTimer);
-            window._mdPatchTimer = setTimeout(patchAllMarkdown, 50);
-          });
-
-          observer.observe(listRoot, { childList: true, subtree: true, characterData: true });
-          
-          // Ejecuta una primera pasada de seguridad
-          patchAllMarkdown();
-        }
-      }, 500);
-
-      // Timeout de seguridad de 10s
-      setTimeout(() => clearInterval(checkInterval), 10000);
+    function patchAllMarkdown() {
+      const { messageList } = getChatParts();
+      if (!messageList) return;
+      patchMarkdownInShadow(messageList);
+      if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
     }
 
     /* ====================================================================== */
@@ -445,6 +442,19 @@
         </div>`;
     }
 
+    function deepQuerySelector(selector, root = document) {
+      const found = root.querySelector?.(selector);
+      if (found) return found;
+      const all = root.querySelectorAll?.("*") || [];
+      for (const el of all) {
+        if (el.shadowRoot) {
+          const nested = deepQuerySelector(selector, el.shadowRoot);
+          if (nested) return nested;
+        }
+      }
+      return null;
+    }
+
     function setNativeValue(element, value) {
       const prototype = Object.getPrototypeOf(element);
       const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
@@ -518,7 +528,8 @@
     }
 
     function bindCarouselScrollListeners() {
-      const tracks = deepQuerySelectorAll(".acn-carousel-track");
+      const { messageList } = getChatParts();
+      const tracks = messageList?.querySelectorAll?.(".acn-carousel-track") || [];
       tracks.forEach(bindTrackScroll);
     }
 
@@ -598,7 +609,7 @@
 
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
-
+      
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext({
           deploymentName: "projects/483471568825/locations/us/apps/27be6c70-74dc-4e50-a3e8-25b032e7c965/deployments/7cbb68f9-147f-4698-be02-e7ea5fa5d1a3",
@@ -606,9 +617,6 @@
           sessionParameters: { "is_voice_handoff": isVoiceHandoff }
         })
       );
-
-      // INICIALIZAR EL OBSERVER DEL DOM (Reemplaza los setTimeout)
-      initShadowObserver();
 
       const chatEl = document.querySelector("chat-messenger");
       const loadingScreen = document.getElementById("loadingScreen");
@@ -641,10 +649,12 @@
           });
         });
 
-        // Solo mantenemos los bindings de scroll para los carruseles aquí, 
-        // el Markdown ahora se encarga automáticamente con el MutationObserver
-        setTimeout(bindCarouselScrollListeners, 250);
-        setTimeout(bindCarouselScrollListeners, 700);
+        // Tu flujo original de temporizadores para asegurar que no interfiera 
+        // con la renderización normal de los custom card de Google
+        setTimeout(patchAllMarkdown, 250);
+        setTimeout(patchAllMarkdown, 700);
+        setTimeout(bindCarouselScrollListeners, 150);
+        setTimeout(bindCarouselScrollListeners, 500);
       });
 
       const showChatUI = () => {
