@@ -4,11 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ACN Bank - Virtual Assistant</title>
-
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
-
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -66,9 +64,7 @@
        Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
        Replace with supported SDK action handling when available.
     ====================================================================== */
-
     window.ACN_WIDGET_REGISTRY = {};
-
     const urlParams = new URLSearchParams(window.location.search);
     const kycRequestId = urlParams.get("r") || urlParams.get("kyc_request_id");
     const customerDocId = urlParams.get("c") || urlParams.get("customer_doc_id");
@@ -88,13 +84,11 @@
        characters as <ctrl46> inside nested tool call argument payloads when
        the input context is large (~20k+ tokens). This happens at the
        tokenizer level and is not a model instruction issue.
-
        This function intercepts raw toolCall.args before any render function
        touches the payload, converts any <ctrlNN> sequences back to their
        ASCII equivalents, and re-parses the JSON. If the JSON is already
        clean the stringify/parse round-trip is a no-op.
     ====================================================================== */
-
     function sanitizeLiveArgs(args) {
       if (!args || typeof args !== "object") return args;
       try {
@@ -109,7 +103,6 @@
     }
 
     /* ====================================================================== */
-
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -195,18 +188,17 @@
        Handles both normal text responses and audio transcripts where all
        newlines are collapsed into a single line.
     ====================================================================== */
-
     function normalizeFlattenedMarkdownTables(text) {
       let value = String(text ?? "");
       if (!value.includes("|")) return value;
       value = value.replace(/\|\s+\|/g, "|\n|");
-      value = value.replace(/([^|\n])\s+(\|[^\n]+\|)/g, (match, pre, tableRow) => {
+      value = value.replace(/([^|\n])\s+(\|[^ \n]+\|)/g, (match, pre, tableRow) => {
         if ((tableRow.match(/\|/g) || []).length >= 2) {
           return pre + "\n" + tableRow;
         }
         return match;
       });
-      value = value.replace(/(\|)\s+([A-Z][^|])/g, "$1\n$2");
+      value = value.replace(/(\|\s+)([A-Z][^|])/g, "$1\n$2");
       return value;
     }
 
@@ -224,18 +216,15 @@
       const rows = bodyLines
         .filter(looksLikeMarkdownTableRow)
         .map(row => row.split("|").slice(1, -1).map(cell => cell.trim()));
-
       const ths = headers.map(h =>
         `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h}</th>`
       ).join("");
-
       const trs = rows.map(cells => {
         const tds = cells.map(d =>
           `<td style="padding:7px 12px;border:1px solid #e0e4ea;font-size:13px;">${d}</td>`
         ).join("");
         return `<tr>${tds}</tr>`;
       }).join("");
-
       return `<div style="overflow-x:auto;width:100%;margin:8px 0;">`
         + `<table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;">`
         + `<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
@@ -245,7 +234,6 @@
       const lines = text.split("\n");
       const out = [];
       let i = 0;
-
       while (i < lines.length) {
         if (
           i + 1 < lines.length &&
@@ -266,7 +254,6 @@
           i += 1;
         }
       }
-
       return out.join("\n");
     }
 
@@ -275,8 +262,8 @@
       html = escapeHtml(html);
       html = renderMarkdownTablesByLines(html);
       html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-      html = html.replace(/(^|[^*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
-      html = html.replace(/`([^`]+)`/g,
+      html = html.replace(/(^|[^\*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
+      html = html.replace(/\`([^\`]+)\`/g,
         `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
       );
       html = html.replace(/((?:^[\*\-] .+\n?)+)/gm, block => {
@@ -308,8 +295,7 @@
       ".message p",
       "p"
     ];
-
-    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
+    const MD_HAS_SYNTAX = /\*\*|\_\_|\*[^\*]|\`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
     function patchMarkdownInShadow(root) {
       if (!root) return;
@@ -340,11 +326,9 @@
     }
 
     /* ====================================================================== */
-
     function buildPaymentCarousel(payload) {
       const payments = payload.payments || [];
       const wid = registerWidget(payments);
-
       const cards = payments.map((p, index) => {
         const status = (p.status || "").toLowerCase();
         const badgeClass = status === "processing" ? "acn-badge-processing" : status === "cancelled" ? "acn-badge-cancelled" : "acn-badge-scheduled";
@@ -353,17 +337,14 @@
         const iconHtml = logoUrl
           ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(p.payee_name)}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;pointer-events:none;">`
           : `<span style="font-size:20px;pointer-events:none;">${getPayeeEmoji(p.payee_name)}</span>`;
-
         const badgeColors = {
           "acn-badge-scheduled": "background:#e7f3e8;color:#2d6a2f;",
           "acn-badge-processing": "background:#fef3cd;color:#8a5a00;",
           "acn-badge-cancelled": "background:#fde8e8;color:#9b1c1c;"
         };
-
         const btnHtml = p.cancellable
           ? `<div class="acn-action-cancel" style="width:100%;padding:9px 0;border:1px solid #b9c1cf;border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:#1a1a2e;cursor:pointer;margin-top:auto;text-align:center;display:flex;justify-content:center;transition:background 0.15s,border-color 0.15s;position:relative;z-index:20;pointer-events:auto;">${escapeHtml(p.cta_label || "Cancel payment")}</div>`
           : `<div class="acn-action-cancel acn-disabled" style="width:100%;padding:9px 0;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:500;color:#9ca3af;cursor:default;pointer-events:none;text-align:center;display:flex;justify-content:center;margin-top:auto;position:relative;z-index:20;">${escapeHtml(p.cta_label || badgeLabel)}</div>`;
-
         return `
           <div class="acn-card acn-item-${index}" style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:16px;width:220px;flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;position:relative;">
             <div style="display:flex;align-items:center;gap:10px;min-height:48px;pointer-events:none;">
@@ -376,17 +357,14 @@
             ${btnHtml}
           </div>`;
       }).join("");
-
       const leftArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;">
           <div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-right:3px;pointer-events:auto;">❮</div>
         </div>` : "";
-
       const rightArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;">
           <div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-left:3px;pointer-events:auto;">❯</div>
         </div>` : "";
-
       return `
         <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;overflow:hidden;padding:5px 0;">
           <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📅 ${escapeHtml(payload.title || "Upcoming scheduled payments")}</div>
@@ -479,20 +457,17 @@
           deepQuerySelector("textarea") ||
           deepQuerySelector("input[type='text']") ||
           deepQuerySelector("input");
-
         if (!textarea) {
           console.warn("No textarea/input found inside Shadow DOM");
           if (chat?.sendQuery) chat.sendQuery(text);
           return;
         }
-
         textarea.focus();
         setNativeValue(textarea, text);
         textarea.dispatchEvent(new InputEvent("input", {
           bubbles: true, composed: true, inputType: "insertText", data: text
         }));
         textarea.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-
         setTimeout(() => {
           textarea.dispatchEvent(new KeyboardEvent("keydown", {
             key: "Enter", code: "Enter", keyCode: 13, which: 13,
@@ -505,7 +480,6 @@
             deepQuerySelector("button");
           if (sendBtn && !sendBtn.disabled) sendBtn.click();
         }, 150);
-
       } catch (err) {
         console.warn("Visible send failed. Falling back to silent sendQuery.", err);
         if (chat?.sendQuery) chat.sendQuery(text);
@@ -547,14 +521,12 @@
       const track = path.find(el => el.classList && el.classList.contains("acn-carousel-track"));
       if (track) bindTrackScroll(track);
     }
-
     document.addEventListener("mouseover", bindScrollListenerLazy, { capture: true, passive: true });
     document.addEventListener("touchstart", bindScrollListenerLazy, { capture: true, passive: true });
 
     function handleWidgetInteractions(e) {
       const path = e.composedPath ? e.composedPath() : [];
       const findInPath = (cls) => path.find(el => el.classList && el.classList.contains(cls));
-
       const arrowBtn = findInPath("acn-arrow-btn");
       if (arrowBtn) {
         e.preventDefault();
@@ -570,7 +542,6 @@
         }
         return;
       }
-
       const cancelBtn = findInPath("acn-action-cancel");
       if (cancelBtn && !cancelBtn.classList.contains("acn-disabled")) {
         e.preventDefault();
@@ -593,7 +564,6 @@
         }
         return;
       }
-
       const selectBtn = findInPath("acn-action-select");
       if (selectBtn) {
         e.preventDefault();
@@ -609,13 +579,14 @@
         }
       }
     }
-
     document.addEventListener("click", handleWidgetInteractions, true);
     document.addEventListener("touchend", handleWidgetInteractions, { passive: false, capture: true });
 
+    // ======================================================================
+    // INITIALIZATION & MUTATION OBSERVER
+    // ======================================================================
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
-
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext({
           deploymentName: "projects/483471568825/locations/us/apps/27be6c70-74dc-4e50-a3e8-25b032e7c965/deployments/7cbb68f9-147f-4698-be02-e7ea5fa5d1a3",
@@ -627,6 +598,13 @@
       const chatEl = document.querySelector("chat-messenger");
       const loadingScreen = document.getElementById("loadingScreen");
 
+      // Function to execute our DOM modifications
+      const postProcessDOM = () => {
+        patchAllMarkdown();
+        bindCarouselScrollListeners();
+      };
+
+      // Render custom widgets
       chatEl.addEventListener("chat-messenger-response-received", (event) => {
         const outputs = event.detail?.raw?.outputs || [];
         outputs.forEach(output => {
@@ -637,14 +615,10 @@
               const toolCall = chunk.toolCall;
               if (!toolCall) return;
 
-              // ── SANITIZER ────────────────────────────────────────────────
-              // Gemini Live encodes quotes as <ctrl46> in large-context turns.
-              // sanitizeLiveArgs normalizes the args before any render touches them.
               const cleanArgs = sanitizeLiveArgs(toolCall.args);
               const payload = cleanArgs?.payload;
-              // ─────────────────────────────────────────────────────────────
-
               if (!payload) return;
+
               const widgetName = payload.name || toolCall.displayName || toolCall.name || "";
               if (widgetName === "acn-payment-carousel") {
                 chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
@@ -656,13 +630,44 @@
             });
           });
         });
-
-        setTimeout(patchAllMarkdown, 250);
-        setTimeout(patchAllMarkdown, 700);
-        setTimeout(bindCarouselScrollListeners, 150);
-        setTimeout(bindCarouselScrollListeners, 500);
+        // Removed setTimeouts here to rely on the MutationObserver
       });
 
+      // MutationObserver to react to DOM changes securely
+      const observer = new MutationObserver((mutations) => {
+        let shouldProcess = false;
+        for (const mutation of mutations) {
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            shouldProcess = true;
+            break;
+          }
+        }
+        if (shouldProcess) {
+          requestAnimationFrame(postProcessDOM);
+        }
+      });
+
+      // Attempt to find the messageList container and observe it
+      const attachObserver = () => {
+        const { messageList } = getChatParts();
+        if (messageList) {
+          observer.observe(messageList, { childList: true, subtree: true });
+        } else {
+          // If not found yet, retry briefly
+          setTimeout(() => {
+            const retryParts = getChatParts();
+            if (retryParts.messageList) {
+              observer.observe(retryParts.messageList, { childList: true, subtree: true });
+            } else {
+              console.warn("MutationObserver: No se pudo encontrar el contenedor de mensajes de chat.");
+            }
+          }, 1000);
+        }
+      };
+
+      attachObserver();
+
+      // Show the chat UI
       const showChatUI = () => {
         if (chatEl) {
           chatEl.style.display = "block";
