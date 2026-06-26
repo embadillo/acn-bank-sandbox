@@ -1,60 +1,557 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ACN Bank - Virtual Assistant</title>
+  <title>Santander Select | Centro de Ayuda</title>
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
-  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100vh;
-      background-color: #f4f6f9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #EC0000;
+      --red-dark: #C20000;
+      --black: #1A1A1A;
+      --gray: #767676;
+      --gray-light: #F5F5F5;
+      --border: #E0E0E0;
+      --white: #FFFFFF;
+      --font: 'Inter', sans-serif;
+    }
+
+    body {
+      font-family: var(--font);
+      letter-spacing: -0.01em;
+      background: var(--white);
+      color: var(--black);
+      min-height: 100vh;
+    }
+
+    /* ── NAVBAR ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      height: 64px;
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      gap: 24px;
+    }
+
+    .nav-menu-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: none;
+      border: none;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--black);
+      cursor: pointer;
+    }
+
+    .nav-menu-btn .hamburger {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-menu-btn .hamburger span {
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--black);
+      border-radius: 1px;
+    }
+
+    .nav-location {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--gray);
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    /* Santander flame SVG inline */
+    .nav-logo svg { height: 32px; }
+
+    .nav-logo-text {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--black);
+      letter-spacing: -0.3px;
+    }
+
+    .nav-logo-text span {
+      color: var(--red);
+    }
+
+    .nav-cta {
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    .nav-cta:hover { background: var(--red-dark); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 56px 24px 40px;
+      background: var(--white);
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 300;
+      color: var(--black);
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+      margin-bottom: 28px;
+    }
+
+    .hero h1 strong {
+      font-weight: 700;
+    }
+
+    .hero-links {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 0;
+    }
+
+    .hero-links a {
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--black);
+      padding: 12px 20px;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .hero-links a:hover {
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+
+    .hero-links a.active {
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+
+    /* ── BANNER CAROUSEL ── */
+    .banner-section {
+      position: relative;
+      overflow: hidden;
+      background: var(--gray-light);
+    }
+
+    .banner-track {
+      display: flex;
+      transition: transform 0.5s ease;
+    }
+
+    .banner-slide {
+      min-width: 100%;
+      height: 340px;
+      display: flex;
+      align-items: center;
+      padding: 40px 8%;
+      position: relative;
       overflow: hidden;
     }
-    .loading-container {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100vh;
-      display: flex; flex-direction: column;
-      justify-content: center; align-items: center;
-      text-align: center; color: #333;
-      z-index: 10; background-color: #f4f6f9;
-      transition: opacity 0.4s ease;
+
+    .banner-slide-1 {
+      background: linear-gradient(100deg, #1A1A1A 0%, #3a3a3a 60%, #555 100%);
     }
+
+    .banner-slide-2 {
+      background: linear-gradient(100deg, #EC0000 0%, #c20000 60%, #a00000 100%);
+    }
+
+    .banner-slide-3 {
+      background: linear-gradient(100deg, #0A3A6B 0%, #1356a0 60%, #1a6ac7 100%);
+    }
+
+    .banner-content {
+      position: relative;
+      z-index: 2;
+      max-width: 480px;
+    }
+
+    .banner-tag {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: var(--white);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+
+    .banner-content h2 {
+      font-size: clamp(24px, 3.5vw, 38px);
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1.15;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+
+    .banner-content h2 em {
+      font-style: italic;
+      color: #FFD0D0;
+    }
+
+    .banner-content p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    .banner-btn {
+      display: inline-block;
+      background: var(--white);
+      color: var(--black);
+      padding: 11px 24px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .banner-btn:hover { opacity: 0.88; }
+
+    .banner-deco {
+      position: absolute;
+      right: 6%;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: clamp(80px, 12vw, 140px);
+      opacity: 0.12;
+      color: var(--white);
+      user-select: none;
+      z-index: 1;
+    }
+
+    /* Dots */
+    .banner-dots {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .banner-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.45);
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.2s;
+    }
+
+    .banner-dot.active { background: var(--white); }
+
+    /* Arrows */
+    .banner-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: var(--white);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: background 0.15s;
+    }
+
+    .banner-arrow:hover { background: rgba(255,255,255,0.28); }
+    .banner-arrow.left { left: 16px; }
+    .banner-arrow.right { right: 16px; }
+
+    /* ── QUICK ACCESS ── */
+    .quick-access {
+      padding: 48px 8%;
+      background: var(--white);
+    }
+
+    .quick-access h3 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 24px;
+    }
+
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .quick-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 22px 20px;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--black);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .quick-card:hover {
+      border-color: var(--red);
+      box-shadow: 0 2px 12px rgba(236,0,0,0.08);
+    }
+
+    .quick-card-icon {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .quick-card-label {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .quick-card-sub {
+      font-size: 12px;
+      color: var(--gray);
+      line-height: 1.4;
+    }
+
+    /* ── CHAT WIDGET ── */
     chat-messenger {
-      position: absolute !important;
-      top: 0 !important; left: 0 !important;
-      width: 100% !important; height: 100vh !important;
-      max-height: 100vh !important;
-      margin: 0 !important; padding: 0 !important;
-      z-index: 5;
-      display: none;
-    }
-    chat-messenger-container {
-      width: 100% !important;
-      height: 100% !important;
+      z-index: 999;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+
+      /* Santander color tokens */
+      --chat-messenger-color--primary: #EC0000;
+      --chat-messenger-color--primary-container: #FFF0F0;
+      --chat-messenger-color--on-primary: #FFFFFF;
+      --chat-messenger-color--on-primary-container: #1A1A1A;
+      --chat-messenger-color--secondary: #F5F5F5;
+      --chat-messenger-color--on-secondary: #444746;
+      --chat-messenger-color--surface: #FFFFFF;
+      --chat-messenger-color--surface-container: #FAFAFA;
+      --chat-messenger-color--surface-container-high: #F5F5F5;
+      --chat-messenger-color--on-surface: #1A1A1A;
+      --chat-messenger-color--on-surface-variant: #767676;
+      --chat-messenger-color--outline: #E0E0E0;
+      --chat-messenger-color--link: #EC0000;
+
+      /* Tighter corners — Santander is squarer */
+      --chat-messenger-shape--corner-value-extra-large: 18px;
+      --chat-messenger-shape--corner-value-large: 14px;
+      --chat-messenger-shape--corner-value-medium: 10px;
+      --chat-messenger-shape--corner-value-small: 6px;
+      --chat-messenger-shape--corner-fully-rounded: 999px;
+
+      --chat-messenger-font-family: 'Inter', sans-serif;
+
+      --chat-messenger-typescale--title-large-font-weight: 500;
+      --chat-messenger-typescale--title-medium-font-weight: 500;
+      --chat-messenger-typescale--body-medium-font-weight: 400;
+      --chat-messenger-typescale--label-large-font-weight: 500;
+
+      --chat-messenger-typescale--body-medium-letter-spacing: -0.01em;
+      --chat-messenger-typescale--label-large-letter-spacing: -0.01em;
     }
   </style>
 </head>
 <body>
-  <div id="loadingScreen" class="loading-container">
-    <h2>Connecting to ACN Bank secure channel...</h2>
-    <p>Please wait while we transfer your verification session.</p>
-  </div>
 
-  <chat-messenger url-allowlist="*">
-    <chat-messenger-container
-      chat-title="ACN Bank Demo"
-      chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
-      enable-file-upload
+  <!-- ── NAVBAR ── -->
+  <nav>
+    <button class="nav-menu-btn">
+      <div class="hamburger">
+        <span></span><span></span><span></span>
+      </div>
+      Menú
+    </button>
+
+    <button class="nav-location">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+    </button>
+
+    <a class="nav-logo" href="#">
+      <!-- Santander flame -->
+      <svg viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 0C20 0 6 12 6 26C6 34.284 12.716 41 21 41C29.284 41 36 34.284 36 26C36 20 32 15 32 15C32 15 30 22 24 24C24 24 28 18 20 10C20 10 16 18 16 26C16 26 13 23 14 17C14 17 10 20 10 26C10 32 14.686 36 21 36C27.314 36 32 31.314 32 25C32 22 30 19.5 30 19.5C30 19.5 28 24 23 25C23 25 26 20 20 0Z" fill="#EC0000"/>
+      </svg>
+      <span class="nav-logo-text">Santander <span>Select</span></span>
+    </a>
+
+    <button class="nav-cta">
+      Online Banking &nbsp;›
+    </button>
+  </nav>
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+    <h1><strong>¡Hola!</strong> ¿En qué podemos ayudarte?</h1>
+    <nav class="hero-links">
+      <a href="#" class="active">Centro de ayuda</a>
+      <a href="#">Promociones</a>
+      <a href="#">Cuentas y tarjetas</a>
+      <a href="#">Tus claves</a>
+      <a href="#">Números útiles</a>
+      <a href="#">Primeros pasos</a>
+    </nav>
+  </section>
+
+  <!-- ── BANNER ── -->
+  <section class="banner-section">
+    <div class="banner-track" id="bannerTrack">
+
+      <div class="banner-slide banner-slide-1">
+        <div class="banner-content">
+          <span class="banner-tag">Protección del hogar</span>
+          <h2>Seguro de <em>Vivienda</em></h2>
+          <p>Para que festejes tranquilo. Contratalo y protegé tus cosas ante todo festejo.</p>
+          <a href="#" class="banner-btn">Conocé más</a>
+        </div>
+        <div class="banner-deco">🏠</div>
+      </div>
+
+      <div class="banner-slide banner-slide-2">
+        <div class="banner-content">
+          <span class="banner-tag">Beneficio Select</span>
+          <h2>0% de comisión en <em>transferencias</em></h2>
+          <p>Mové tu plata sin costo. Ilimitado para clientes Select durante todo el mes.</p>
+          <a href="#" class="banner-btn">Ver condiciones</a>
+        </div>
+        <div class="banner-deco">💸</div>
+      </div>
+
+      <div class="banner-slide banner-slide-3">
+        <div class="banner-content">
+          <span class="banner-tag">Préstamos personales</span>
+          <h2>Hasta $5M en <em>24 horas</em></h2>
+          <p>Aprobación inmediata para clientes Select. Sin papeles, sin vueltas.</p>
+          <a href="#" class="banner-btn">Simular cuota</a>
+        </div>
+        <div class="banner-deco">🏦</div>
+      </div>
+
+    </div>
+
+    <button class="banner-arrow left" id="arrowLeft">‹</button>
+    <button class="banner-arrow right" id="arrowRight">›</button>
+
+    <div class="banner-dots">
+      <button class="banner-dot active" data-index="0"></button>
+      <button class="banner-dot" data-index="1"></button>
+      <button class="banner-dot" data-index="2"></button>
+    </div>
+  </section>
+
+  <!-- ── QUICK ACCESS ── -->
+  <section class="quick-access">
+    <h3>Acceso rápido</h3>
+    <div class="quick-grid">
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">💳</div>
+        <div class="quick-card-label">Mis tarjetas</div>
+        <div class="quick-card-sub">Límites, extractos y bloqueos</div>
+      </a>
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">📅</div>
+        <div class="quick-card-label">Pagos programados</div>
+        <div class="quick-card-sub">Administrá tus débitos automáticos</div>
+      </a>
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">🔐</div>
+        <div class="quick-card-label">Tus claves</div>
+        <div class="quick-card-sub">Cambio y recupero de contraseña</div>
+      </a>
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">📞</div>
+        <div class="quick-card-label">Números útiles</div>
+        <div class="quick-card-sub">Contacto 24/7 para emergencias</div>
+      </a>
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">💰</div>
+        <div class="quick-card-label">Préstamos</div>
+        <div class="quick-card-sub">Simulá y solicitá en línea</div>
+      </a>
+      <a href="#" class="quick-card">
+        <div class="quick-card-icon">⭐</div>
+        <div class="quick-card-label">Beneficios Select</div>
+        <div class="quick-card-sub">Descuentos y promociones exclusivos</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── CHAT WIDGET ── -->
+  <chat-messenger url-allowlist="*" language-code="es">
+    <chat-messenger-chat-bubble
+      chat-title="Santander | Asistente Virtual"
+      chat-title-icon="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Banco_Santander_Logotipo.svg/320px-Banco_Santander_Logotipo.svg.png"
       enable-audio-input>
-      <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
-      <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
-      <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
-    </chat-messenger-container>
+    </chat-messenger-chat-bubble>
   </chat-messenger>
 
   <script>
@@ -62,7 +559,6 @@
        TEMPORARY DEMO WORKAROUND
        The SDK sanitizer strips data-* attributes, ids, and button semantics.
        Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
-       Replace with supported SDK action handling when available.
     ====================================================================== */
     window.ACN_WIDGET_REGISTRY = {};
     const urlParams = new URLSearchParams(window.location.search);
@@ -78,17 +574,6 @@
       "toronto property tax":  BASE + "Captura%20de%20pantalla%202026-06-07%20141855.png"
     };
 
-    /* ======================================================================
-       SANITIZER
-       Gemini Live (gemini-3.1-flash-live) sometimes encodes double-quote
-       characters as <ctrl46> inside nested tool call argument payloads when
-       the input context is large (~20k+ tokens). This happens at the
-       tokenizer level and is not a model instruction issue.
-       This function intercepts raw toolCall.args before any render function
-       touches the payload, converts any <ctrlNN> sequences back to their
-       ASCII equivalents, and re-parses the JSON. If the JSON is already
-       clean the stringify/parse round-trip is a no-op.
-    ====================================================================== */
     function sanitizeLiveArgs(args) {
       if (!args || typeof args !== "object") return args;
       try {
@@ -102,14 +587,10 @@
       }
     }
 
-    /* ====================================================================== */
     function escapeHtml(value) {
       return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
     function getPayeeLogo(payeeName) {
@@ -133,19 +614,15 @@
       const maxAge = 10 * 60 * 1000;
       const now = Date.now();
       Object.entries(window.ACN_WIDGET_REGISTRY).forEach(([key, value]) => {
-        if (!value || !value.createdAt || now - value.createdAt > maxAge) {
+        if (!value || !value.createdAt || now - value.createdAt > maxAge)
           delete window.ACN_WIDGET_REGISTRY[key];
-        }
       });
     }
 
     function registerWidget(items) {
       cleanupRegistry();
       const wid = "w_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-      window.ACN_WIDGET_REGISTRY[wid] = {
-        items: Array.isArray(items) ? items : [],
-        createdAt: Date.now()
-      };
+      window.ACN_WIDGET_REGISTRY[wid] = { items: Array.isArray(items) ? items : [], createdAt: Date.now() };
       return wid;
     }
 
@@ -181,21 +658,12 @@
       return { chat, chatContainer, userInput, messageList, textarea, sendBtn };
     }
 
-    /* ======================================================================
-       MARKDOWN RENDERER
-       Converts agent markdown to HTML. Applied as a DOM post-process pass
-       after each response since the SDK renders text as plain strings.
-       Handles both normal text responses and audio transcripts where all
-       newlines are collapsed into a single line.
-    ====================================================================== */
     function normalizeFlattenedMarkdownTables(text) {
       let value = String(text ?? "");
       if (!value.includes("|")) return value;
       value = value.replace(/\|\s+\|/g, "|\n|");
       value = value.replace(/([^|\n])\s+(\|[^ \n]+\|)/g, (match, pre, tableRow) => {
-        if ((tableRow.match(/\|/g) || []).length >= 2) {
-          return pre + "\n" + tableRow;
-        }
+        if ((tableRow.match(/\|/g) || []).length >= 2) return pre + "\n" + tableRow;
         return match;
       });
       value = value.replace(/(\|\s+)([A-Z][^|])/g, "$1\n$2");
@@ -213,8 +681,7 @@
 
     function renderMarkdownTable(headerLine, separatorLine, bodyLines) {
       const headers = headerLine.split("|").slice(1, -1).map(h => h.trim());
-      const rows = bodyLines
-        .filter(looksLikeMarkdownTableRow)
+      const rows = bodyLines.filter(looksLikeMarkdownTableRow)
         .map(row => row.split("|").slice(1, -1).map(cell => cell.trim()));
       const ths = headers.map(h =>
         `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h}</th>`
@@ -225,9 +692,7 @@
         ).join("");
         return `<tr>${tds}</tr>`;
       }).join("");
-      return `<div style="overflow-x:auto;width:100%;margin:8px 0;">`
-        + `<table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;">`
-        + `<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+      return `<div style="overflow-x:auto;width:100%;margin:8px 0;"><table style="border-collapse:collapse;width:100%;"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
     }
 
     function renderMarkdownTablesByLines(text) {
@@ -235,24 +700,12 @@
       const out = [];
       let i = 0;
       while (i < lines.length) {
-        if (
-          i + 1 < lines.length &&
-          looksLikeMarkdownTableRow(lines[i]) &&
-          isMarkdownSeparatorRow(lines[i + 1])
-        ) {
-          const header = lines[i];
-          const separator = lines[i + 1];
-          const body = [];
+        if (i + 1 < lines.length && looksLikeMarkdownTableRow(lines[i]) && isMarkdownSeparatorRow(lines[i + 1])) {
+          const header = lines[i]; const separator = lines[i + 1]; const body = [];
           i += 2;
-          while (i < lines.length && looksLikeMarkdownTableRow(lines[i])) {
-            body.push(lines[i]);
-            i += 1;
-          }
+          while (i < lines.length && looksLikeMarkdownTableRow(lines[i])) { body.push(lines[i]); i += 1; }
           out.push(renderMarkdownTable(header, separator, body));
-        } else {
-          out.push(lines[i]);
-          i += 1;
-        }
+        } else { out.push(lines[i]); i += 1; }
       }
       return out.join("\n");
     }
@@ -263,19 +716,13 @@
       html = renderMarkdownTablesByLines(html);
       html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
       html = html.replace(/(^|[^\*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
-      html = html.replace(/\`([^\`]+)\`/g,
-        `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
-      );
+      html = html.replace(/\`([^\`]+)\`/g, `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`);
       html = html.replace(/((?:^[\*\-] .+\n?)+)/gm, block => {
-        const items = block.trim().split("\n").map(line =>
-          `<li style="margin:3px 0;">${line.replace(/^[\*\-] /, "").trim()}</li>`
-        ).join("");
+        const items = block.trim().split("\n").map(line => `<li style="margin:3px 0;">${line.replace(/^[\*\-] /, "").trim()}</li>`).join("");
         return `<ul style="margin:6px 0;padding-left:18px;">${items}</ul>`;
       });
       html = html.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
-        const items = block.trim().split("\n").map(line =>
-          `<li style="margin:3px 0;">${line.replace(/^\d+\. /, "").trim()}</li>`
-        ).join("");
+        const items = block.trim().split("\n").map(line => `<li style="margin:3px 0;">${line.replace(/^\d+\. /, "").trim()}</li>`).join("");
         return `<ol style="margin:6px 0;padding-left:18px;">${items}</ol>`;
       });
       html = html.replace(/\n/g, "<br>");
@@ -284,17 +731,7 @@
       return html;
     }
 
-    const MD_SELECTORS = [
-      ".message-text",
-      ".bot-message .text",
-      ".bot-message p",
-      ".response-text",
-      ".chat-message--bot .message",
-      "df-messenger-message p",
-      "chat-messenger-message p",
-      ".message p",
-      "p"
-    ];
+    const MD_SELECTORS = [".message-text",".bot-message .text",".bot-message p",".response-text",".chat-message--bot .message","df-messenger-message p","chat-messenger-message p",".message p","p"];
     const MD_HAS_SYNTAX = /\*\*|\_\_|\*[^\*]|\`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
     function patchMarkdownInShadow(root) {
@@ -305,7 +742,6 @@
         els.forEach(el => {
           const raw = el.innerText ?? el.textContent ?? "";
           if (MD_HAS_SYNTAX.test(raw)) {
-            console.log("ACN markdown raw:", JSON.stringify(raw));
             el.innerHTML = renderMarkdown(raw);
             el.setAttribute("data-md-done", "true");
           }
@@ -313,9 +749,7 @@
         if (root.querySelectorAll(`${selector}[data-md-done]`).length > 0) break;
       }
       const all = root.querySelectorAll("*");
-      all.forEach(el => {
-        if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot);
-      });
+      all.forEach(el => { if (el.shadowRoot) patchMarkdownInShadow(el.shadowRoot); });
     }
 
     function patchAllMarkdown() {
@@ -325,7 +759,6 @@
       if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
     }
 
-    /* ====================================================================== */
     function buildPaymentCarousel(payload) {
       const payments = payload.payments || [];
       const wid = registerWidget(payments);
@@ -343,40 +776,26 @@
           "acn-badge-cancelled": "background:#fde8e8;color:#9b1c1c;"
         };
         const btnHtml = p.cancellable
-          ? `<div class="acn-action-cancel" style="width:100%;padding:9px 0;border:1px solid #b9c1cf;border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:#1a1a2e;cursor:pointer;margin-top:auto;text-align:center;display:flex;justify-content:center;transition:background 0.15s,border-color 0.15s;position:relative;z-index:20;pointer-events:auto;">${escapeHtml(p.cta_label || "Cancel payment")}</div>`
-          : `<div class="acn-action-cancel acn-disabled" style="width:100%;padding:9px 0;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;font-size:13px;font-weight:500;color:#9ca3af;cursor:default;pointer-events:none;text-align:center;display:flex;justify-content:center;margin-top:auto;position:relative;z-index:20;">${escapeHtml(p.cta_label || badgeLabel)}</div>`;
-        return `
-          <div class="acn-card acn-item-${index}" style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:16px;width:220px;flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;position:relative;">
-            <div style="display:flex;align-items:center;gap:10px;min-height:48px;pointer-events:none;">
-              <div style="width:44px;height:44px;border-radius:50%;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-sizing:border-box;padding:3px;">${iconHtml}</div>
-              <div style="font-size:14px;font-weight:600;color:#1a1a2e;line-height:1.2;white-space:normal;word-break:break-word;">${escapeHtml(p.payee_name || "")}</div>
-            </div>
-            <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;width:fit-content;${badgeColors[badgeClass] || badgeColors["acn-badge-scheduled"]}pointer-events:none;">${escapeHtml(badgeLabel)}</span>
-            <div style="font-size:13px;color:#374151;display:flex;align-items:center;gap:5px;margin-top:2px;pointer-events:none;">📅 ${escapeHtml(p.display_date || "")}</div>
-            <div style="font-size:13px;font-weight:700;color:#374151;display:flex;align-items:center;gap:5px;pointer-events:none;">💲 ${escapeHtml(p.currency || "CAD")} ${escapeHtml(p.amount || "")}</div>
-            ${btnHtml}
-          </div>`;
-      }).join("");
-      const leftArrow = payments.length > 2 ? `
-        <div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;">
-          <div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-right:3px;pointer-events:auto;">❮</div>
-        </div>` : "";
-      const rightArrow = payments.length > 2 ? `
-        <div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;">
-          <div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-left:3px;pointer-events:auto;">❯</div>
-        </div>` : "";
-      return `
-        <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;overflow:hidden;padding:5px 0;">
-          <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📅 ${escapeHtml(payload.title || "Upcoming scheduled payments")}</div>
-          <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">${escapeHtml(payload.subtitle || "")}</div>
-          <div style="position:relative;width:100%;">
-            ${leftArrow}
-            <div class="acn-carousel-track" style="display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding-bottom:10px;padding-right:45px;padding-left:5px;scroll-behavior:smooth;">
-              ${cards}
-            </div>
-            ${rightArrow}
+          ? `<div class="acn-action-cancel" style="width:100%;padding:9px 0;border:1px solid #b9c1cf;border-radius:4px;background:#fff;font-size:13px;font-weight:600;color:#1a1a2e;cursor:pointer;margin-top:auto;text-align:center;display:flex;justify-content:center;transition:background 0.15s,border-color 0.15s;position:relative;z-index:20;pointer-events:auto;">${escapeHtml(p.cta_label || "Cancel payment")}</div>`
+          : `<div class="acn-action-cancel acn-disabled" style="width:100%;padding:9px 0;border:1px solid #e5e7eb;border-radius:4px;background:#f8fafc;font-size:13px;font-weight:500;color:#9ca3af;cursor:default;pointer-events:none;text-align:center;display:flex;justify-content:center;margin-top:auto;position:relative;z-index:20;">${escapeHtml(p.cta_label || badgeLabel)}</div>`;
+        return `<div class="acn-card acn-item-${index}" style="background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:16px;width:220px;flex:0 0 auto;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;position:relative;">
+          <div style="display:flex;align-items:center;gap:10px;min-height:48px;pointer-events:none;">
+            <div style="width:44px;height:44px;border-radius:50%;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-sizing:border-box;padding:3px;">${iconHtml}</div>
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;line-height:1.2;white-space:normal;word-break:break-word;">${escapeHtml(p.payee_name || "")}</div>
           </div>
+          <span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:500;width:fit-content;${badgeColors[badgeClass] || badgeColors["acn-badge-scheduled"]}pointer-events:none;">${escapeHtml(badgeLabel)}</span>
+          <div style="font-size:13px;color:#374151;display:flex;align-items:center;gap:5px;margin-top:2px;pointer-events:none;">📅 ${escapeHtml(p.display_date || "")}</div>
+          <div style="font-size:13px;font-weight:700;color:#374151;display:flex;align-items:center;gap:5px;pointer-events:none;">💲 ${escapeHtml(p.currency || "CAD")} ${escapeHtml(p.amount || "")}</div>
+          ${btnHtml}
         </div>`;
+      }).join("");
+      const leftArrow = payments.length > 2 ? `<div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;"><div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#EC0000;font-weight:bold;font-size:16px;pointer-events:auto;">❮</div></div>` : "";
+      const rightArrow = payments.length > 2 ? `<div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;"><div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#EC0000;font-weight:bold;font-size:16px;pointer-events:auto;">❯</div></div>` : "";
+      return `<div class="acn-widget-root ${wid}" style="font-family:'Inter',sans-serif;width:100%;box-sizing:border-box;overflow:hidden;padding:5px 0;">
+        <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📅 ${escapeHtml(payload.title || "Upcoming scheduled payments")}</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">${escapeHtml(payload.subtitle || "")}</div>
+        <div style="position:relative;width:100%;">${leftArrow}<div class="acn-carousel-track" style="display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding-bottom:10px;padding-right:45px;padding-left:5px;scroll-behavior:smooth;">${cards}</div>${rightArrow}</div>
+      </div>`;
     }
 
     function buildPayeeSelector(payload) {
@@ -387,22 +806,20 @@
         const iconHtml = logoUrl
           ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(p.payee_name)}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;pointer-events:none;">`
           : `<span style="font-size:16px;pointer-events:none;">${getPayeeEmoji(p.payee_name)}</span>`;
-        return `
-          <div class="acn-action-select acn-row acn-item-${index}" style="background:#fff;border-bottom:1px solid #e0e4ea;padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background 0.15s;position:relative;z-index:20;pointer-events:auto;">
-            <div style="width:36px;height:36px;border-radius:50%;background:#f4f6f9;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:2px;pointer-events:none;">${iconHtml}</div>
-            <div style="flex-grow:1;pointer-events:none;">
-              <div style="font-size:14px;font-weight:600;color:#1a1a2e;pointer-events:none;">${escapeHtml(p.payee_name || "")}</div>
-              <div style="font-size:12px;color:#6b7280;pointer-events:none;">Acct: ${escapeHtml(p.account_number || "****")}</div>
-            </div>
-            <div style="color:#1a56db;font-size:14px;pointer-events:none;">❯</div>
-          </div>`;
-      }).join("");
-      return `
-        <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
-          <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">💳 ${escapeHtml(payload.title || "Your Saved Payees")}</div>
-          <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">${escapeHtml(payload.subtitle || "Select a payee to continue.")}</div>
-          <div class="acn-list-track" style="border:1px solid #e0e4ea;border-radius:12px;overflow:hidden;">${rows}</div>
+        return `<div class="acn-action-select acn-row acn-item-${index}" style="background:#fff;border-bottom:1px solid #e0e4ea;padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background 0.15s;position:relative;z-index:20;pointer-events:auto;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#f4f6f9;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:2px;pointer-events:none;">${iconHtml}</div>
+          <div style="flex-grow:1;pointer-events:none;">
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;pointer-events:none;">${escapeHtml(p.payee_name || "")}</div>
+            <div style="font-size:12px;color:#6b7280;pointer-events:none;">Acct: ${escapeHtml(p.account_number || "****")}</div>
+          </div>
+          <div style="color:#EC0000;font-size:14px;pointer-events:none;">❯</div>
         </div>`;
+      }).join("");
+      return `<div class="acn-widget-root ${wid}" style="font-family:'Inter',sans-serif;width:100%;box-sizing:border-box;">
+        <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">💳 ${escapeHtml(payload.title || "Your Saved Payees")}</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">${escapeHtml(payload.subtitle || "Select a payee to continue.")}</div>
+        <div class="acn-list-track" style="border:1px solid #e0e4ea;border-radius:6px;overflow:hidden;">${rows}</div>
+      </div>`;
     }
 
     function buildPaymentReceipt(payload) {
@@ -413,21 +830,20 @@
       const status = (payload.status || "success").toLowerCase();
       const statusColor = status === "cancelled" ? "#9b1c1c" : "#2d6a2f";
       const statusBg = status === "cancelled" ? "#fde8e8" : "#e7f3e8";
-      return `
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
-          <div style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
-            <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:#f4f6f9;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;">${iconHtml}</div>
-            <div style="font-size:18px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">${escapeHtml(payload.title || "Transaction Receipt")}</div>
-            <div style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:500;background:${statusBg};color:${statusColor};margin-bottom:16px;">${escapeHtml(payload.status ? payload.status.toUpperCase() : "SUCCESS")}</div>
-            <div style="border-top:1px dashed #e0e4ea;border-bottom:1px dashed #e0e4ea;padding:16px 0;margin-bottom:16px;text-align:left;">
-              <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Payee</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.payee_name || "")}</span></div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Amount</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.currency || "CAD")} ${escapeHtml(payload.amount || "")}</span></div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Date / Freq</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.date_or_frequency || "")}</span></div>
-              <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;font-size:13px;">Ref ID</span><span style="font-family:monospace;color:#1a1a2e;font-size:12px;background:#f4f6f9;padding:2px 6px;border-radius:4px;">${escapeHtml(payload.receipt_id || "")}</span></div>
-            </div>
-            <div style="font-size:11px;color:#9ca3af;">Thank you for using ACN Bank.</div>
+      return `<div style="font-family:'Inter',sans-serif;width:100%;box-sizing:border-box;">
+        <div style="background:#fff;border:1px solid #e0e4ea;border-radius:8px;padding:20px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+          <div style="width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:#f4f6f9;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px;">${iconHtml}</div>
+          <div style="font-size:18px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">${escapeHtml(payload.title || "Transaction Receipt")}</div>
+          <div style="display:inline-block;padding:3px 12px;border-radius:4px;font-size:12px;font-weight:500;background:${statusBg};color:${statusColor};margin-bottom:16px;">${escapeHtml(payload.status ? payload.status.toUpperCase() : "SUCCESS")}</div>
+          <div style="border-top:1px dashed #e0e4ea;border-bottom:1px dashed #e0e4ea;padding:16px 0;margin-bottom:16px;text-align:left;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Payee</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.payee_name || "")}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Amount</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.currency || "CAD")} ${escapeHtml(payload.amount || "")}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:13px;">Date / Freq</span><span style="font-weight:600;color:#1a1a2e;font-size:13px;">${escapeHtml(payload.date_or_frequency || "")}</span></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;font-size:13px;">Ref ID</span><span style="font-family:monospace;color:#1a1a2e;font-size:12px;background:#f4f6f9;padding:2px 6px;border-radius:4px;">${escapeHtml(payload.receipt_id || "")}</span></div>
           </div>
-        </div>`;
+          <div style="font-size:11px;color:#9ca3af;">Gracias por usar Santander.</div>
+        </div>
+      </div>`;
     }
 
     function deepQuerySelector(selector, root = document) {
@@ -435,10 +851,7 @@
       if (found) return found;
       const all = root.querySelectorAll?.("*") || [];
       for (const el of all) {
-        if (el.shadowRoot) {
-          const nested = deepQuerySelector(selector, el.shadowRoot);
-          if (nested) return nested;
-        }
+        if (el.shadowRoot) { const nested = deepQuerySelector(selector, el.shadowRoot); if (nested) return nested; }
       }
       return null;
     }
@@ -453,35 +866,18 @@
     function acnSendMessage(text) {
       const chat = document.querySelector("chat-messenger");
       try {
-        const textarea =
-          deepQuerySelector("textarea") ||
-          deepQuerySelector("input[type='text']") ||
-          deepQuerySelector("input");
-        if (!textarea) {
-          console.warn("No textarea/input found inside Shadow DOM");
-          if (chat?.sendQuery) chat.sendQuery(text);
-          return;
-        }
+        const textarea = deepQuerySelector("textarea") || deepQuerySelector("input[type='text']") || deepQuerySelector("input");
+        if (!textarea) { if (chat?.sendQuery) chat.sendQuery(text); return; }
         textarea.focus();
         setNativeValue(textarea, text);
-        textarea.dispatchEvent(new InputEvent("input", {
-          bubbles: true, composed: true, inputType: "insertText", data: text
-        }));
+        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
         textarea.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
         setTimeout(() => {
-          textarea.dispatchEvent(new KeyboardEvent("keydown", {
-            key: "Enter", code: "Enter", keyCode: 13, which: 13,
-            bubbles: true, composed: true
-          }));
-          const sendBtn =
-            deepQuerySelector("button[aria-label='Send']") ||
-            deepQuerySelector("button[title='Send']") ||
-            deepQuerySelector(".send-icon") ||
-            deepQuerySelector("button");
+          textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, composed: true }));
+          const sendBtn = deepQuerySelector("button[aria-label='Send']") || deepQuerySelector("button[title='Send']") || deepQuerySelector(".send-icon") || deepQuerySelector("button");
           if (sendBtn && !sendBtn.disabled) sendBtn.click();
         }, 150);
       } catch (err) {
-        console.warn("Visible send failed. Falling back to silent sendQuery.", err);
         if (chat?.sendQuery) chat.sendQuery(text);
       }
     }
@@ -493,14 +889,8 @@
       const rightArrowWrapper = root.querySelector(".acn-arrow-right-wrapper");
       const isAtStart = track.scrollLeft <= 5;
       const isAtEnd = track.scrollWidth - track.scrollLeft <= track.clientWidth + 5;
-      if (leftArrowWrapper) {
-        leftArrowWrapper.style.opacity = isAtStart ? "0" : "1";
-        leftArrowWrapper.style.pointerEvents = isAtStart ? "none" : "auto";
-      }
-      if (rightArrowWrapper) {
-        rightArrowWrapper.style.opacity = isAtEnd ? "0" : "1";
-        rightArrowWrapper.style.pointerEvents = isAtEnd ? "none" : "auto";
-      }
+      if (leftArrowWrapper) { leftArrowWrapper.style.opacity = isAtStart ? "0" : "1"; leftArrowWrapper.style.pointerEvents = isAtStart ? "none" : "auto"; }
+      if (rightArrowWrapper) { rightArrowWrapper.style.opacity = isAtEnd ? "0" : "1"; rightArrowWrapper.style.pointerEvents = isAtEnd ? "none" : "auto"; }
     }
 
     function bindTrackScroll(track) {
@@ -529,23 +919,20 @@
       const findInPath = (cls) => path.find(el => el.classList && el.classList.contains(cls));
       const arrowBtn = findInPath("acn-arrow-btn");
       if (arrowBtn) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const root = findInPath("acn-widget-root");
         const track = root?.querySelector?.(".acn-carousel-track");
         if (track) {
           const card = track.firstElementChild;
           const scrollAmount = card ? card.offsetWidth + 12 : 232;
-          const isLeft = arrowBtn.classList.contains("left-arrow");
-          track.scrollBy({ left: isLeft ? -scrollAmount : scrollAmount, behavior: "smooth" });
+          track.scrollBy({ left: arrowBtn.classList.contains("left-arrow") ? -scrollAmount : scrollAmount, behavior: "smooth" });
           setTimeout(() => updateCarouselArrows(track), 350);
         }
         return;
       }
       const cancelBtn = findInPath("acn-action-cancel");
       if (cancelBtn && !cancelBtn.classList.contains("acn-disabled")) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const card = findInPath("acn-card");
         const root = findInPath("acn-widget-root");
         const index = getItemIndexFromClass(card);
@@ -554,37 +941,28 @@
         if (item) {
           cancelBtn.textContent = "Cancelled";
           cancelBtn.classList.add("acn-disabled");
-          cancelBtn.style.background = "#f8fafc";
-          cancelBtn.style.color = "#9b1c1c";
-          cancelBtn.style.borderColor = "#fca5a5";
-          cancelBtn.style.pointerEvents = "none";
-          cancelBtn.style.cursor = "default";
-          const cta = item.cta_value || `cancel_payment:${item.payment_id || item.payee_name}`;
-          acnSendMessage(cta);
+          cancelBtn.style.cssText = "background:#f8fafc;color:#9b1c1c;border-color:#fca5a5;pointer-events:none;cursor:default;width:100%;padding:9px 0;border:1px solid;border-radius:4px;font-size:13px;font-weight:600;text-align:center;display:flex;justify-content:center;margin-top:auto;";
+          acnSendMessage(item.cta_value || `cancel_payment:${item.payment_id || item.payee_name}`);
         }
         return;
       }
       const selectBtn = findInPath("acn-action-select");
       if (selectBtn) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const root = findInPath("acn-widget-root");
         const index = getItemIndexFromClass(selectBtn);
         const widClass = Array.from(root?.classList || []).find(c => c.startsWith("w_"));
         const item = widClass ? getWidgetItems(widClass)[index] : null;
         if (item) {
-          selectBtn.style.background = "#f0f4ff";
-          const cta = item.cta_value || `select_payee:${item.payee_id || item.payee_name}`;
-          acnSendMessage(cta);
+          selectBtn.style.background = "#fff0f0";
+          acnSendMessage(item.cta_value || `select_payee:${item.payee_id || item.payee_name}`);
         }
       }
     }
     document.addEventListener("click", handleWidgetInteractions, true);
     document.addEventListener("touchend", handleWidgetInteractions, { passive: false, capture: true });
 
-    // ======================================================================
-    // INITIALIZATION & MUTATION OBSERVER
-    // ======================================================================
+    // ── CHAT INIT ──
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
       chatSdk.registerContext(
@@ -596,98 +974,68 @@
       );
 
       const chatEl = document.querySelector("chat-messenger");
-      const loadingScreen = document.getElementById("loadingScreen");
 
-      // Function to execute our DOM modifications
-      const postProcessDOM = () => {
-        patchAllMarkdown();
-        bindCarouselScrollListeners();
-      };
+      const postProcessDOM = () => { patchAllMarkdown(); bindCarouselScrollListeners(); };
 
-      // Render custom widgets
       chatEl.addEventListener("chat-messenger-response-received", (event) => {
         const outputs = event.detail?.raw?.outputs || [];
         outputs.forEach(output => {
           const messages = output?.diagnosticInfo?.messages || [];
           messages.forEach(message => {
-            const chunks = message.chunks || [];
-            chunks.forEach(chunk => {
+            (message.chunks || []).forEach(chunk => {
               const toolCall = chunk.toolCall;
               if (!toolCall) return;
-
               const cleanArgs = sanitizeLiveArgs(toolCall.args);
               const payload = cleanArgs?.payload;
               if (!payload) return;
-
               const widgetName = payload.name || toolCall.displayName || toolCall.name || "";
-              if (widgetName === "acn-payment-carousel") {
-                chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
-              } else if (widgetName === "acn-payee-selector") {
-                chatEl.renderCustomCard([{ type: "html", html: buildPayeeSelector(payload) }]);
-              } else if (widgetName === "acn-payment-receipt") {
-                chatEl.renderCustomCard([{ type: "html", html: buildPaymentReceipt(payload) }]);
-              }
+              if (widgetName === "acn-payment-carousel") chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
+              else if (widgetName === "acn-payee-selector") chatEl.renderCustomCard([{ type: "html", html: buildPayeeSelector(payload) }]);
+              else if (widgetName === "acn-payment-receipt") chatEl.renderCustomCard([{ type: "html", html: buildPaymentReceipt(payload) }]);
             });
           });
         });
-        // Removed setTimeouts here to rely on the MutationObserver
       });
 
-      // MutationObserver to react to DOM changes securely
       const observer = new MutationObserver((mutations) => {
-        let shouldProcess = false;
-        for (const mutation of mutations) {
-          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            shouldProcess = true;
-            break;
-          }
-        }
-        if (shouldProcess) {
+        if (mutations.some(m => m.type === "childList" && m.addedNodes.length > 0))
           requestAnimationFrame(postProcessDOM);
-        }
       });
 
-      // Attempt to find the messageList container and observe it
       const attachObserver = () => {
         const { messageList } = getChatParts();
-        if (messageList) {
-          observer.observe(messageList, { childList: true, subtree: true });
-        } else {
-          // If not found yet, retry briefly
-          setTimeout(() => {
-            const retryParts = getChatParts();
-            if (retryParts.messageList) {
-              observer.observe(retryParts.messageList, { childList: true, subtree: true });
-            } else {
-              console.warn("MutationObserver: No se pudo encontrar el contenedor de mensajes de chat.");
-            }
-          }, 1000);
-        }
+        if (messageList) observer.observe(messageList, { childList: true, subtree: true });
+        else setTimeout(() => { const { messageList: ml } = getChatParts(); if (ml) observer.observe(ml, { childList: true, subtree: true }); }, 1000);
       };
 
       attachObserver();
 
-      // Show the chat UI
-      const showChatUI = () => {
-        if (chatEl) {
-          chatEl.style.display = "block";
-          if (typeof chatEl.openChat === "function") chatEl.openChat();
-          else if (typeof chatEl.expandChatWindow === "function") chatEl.expandChatWindow();
-          else chatEl.setAttribute("open", "true");
-        }
-        if (loadingScreen) loadingScreen.style.display = "none";
-      };
-
       if (isVoiceHandoff) {
         setTimeout(() => {
           const kycPayload = `continue_kyc_upload:${kycRequestId}:${customerDocId}`;
-          showChatUI();
           if (chatEl && typeof chatEl.sendQuery === "function") chatEl.sendQuery(kycPayload);
         }, 1500);
-      } else {
-        showChatUI();
       }
     });
+
+    // ── BANNER CAROUSEL ──
+    let currentSlide = 0;
+    const totalSlides = 3;
+    const track = document.getElementById("bannerTrack");
+    const dots = document.querySelectorAll(".banner-dot");
+
+    function goToSlide(n) {
+      currentSlide = (n + totalSlides) % totalSlides;
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      dots.forEach((d, i) => d.classList.toggle("active", i === currentSlide));
+    }
+
+    document.getElementById("arrowLeft").addEventListener("click", () => goToSlide(currentSlide - 1));
+    document.getElementById("arrowRight").addEventListener("click", () => goToSlide(currentSlide + 1));
+    dots.forEach(dot => dot.addEventListener("click", () => goToSlide(Number(dot.dataset.index))));
+
+    // Auto-advance every 5s
+    setInterval(() => goToSlide(currentSlide + 1), 5000);
   </script>
 </body>
 </html>
