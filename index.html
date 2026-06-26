@@ -381,9 +381,9 @@
     /* ── CHAT WIDGET ── */
     chat-messenger {
       z-index: 999;
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
+      position: fixed !important;
+      right: 28px !important;
+      bottom: 88px !important;
 
       /* Santander color tokens */
       --chat-messenger-color--primary: #EC0000;
@@ -400,12 +400,14 @@
       --chat-messenger-color--outline: #E0E0E0;
       --chat-messenger-color--link: #EC0000;
 
-      /* Tighter corners — Santander is squarer */
+      /* Launcher / panel look */
       --chat-messenger-shape--corner-value-extra-large: 18px;
       --chat-messenger-shape--corner-value-large: 14px;
       --chat-messenger-shape--corner-value-medium: 10px;
       --chat-messenger-shape--corner-value-small: 6px;
       --chat-messenger-shape--corner-fully-rounded: 999px;
+      --chat-messenger-elevation--level3: 0 18px 48px rgba(0,0,0,0.20);
+      --chat-messenger-elevation--level4: 0 24px 64px rgba(0,0,0,0.24);
 
       --chat-messenger-font-family: 'Inter', sans-serif;
 
@@ -416,6 +418,13 @@
 
       --chat-messenger-typescale--body-medium-letter-spacing: -0.01em;
       --chat-messenger-typescale--label-large-letter-spacing: -0.01em;
+    }
+
+    @media (max-width: 600px) {
+      chat-messenger {
+        right: 18px !important;
+        bottom: 72px !important;
+      }
     }
   </style>
 </head>
@@ -549,7 +558,7 @@
   <chat-messenger url-allowlist="*" language-code="es">
     <chat-messenger-chat-bubble
       chat-title="Santander | Asistente Virtual"
-      chat-title-icon="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Banco_Santander_Logotipo.svg/320px-Banco_Santander_Logotipo.svg.png"
+      chat-title-icon="data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2040%2052%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M20%200C20%200%206%2012%206%2026C6%2034.284%2012.716%2041%2021%2041C29.284%2041%2036%2034.284%2036%2026C36%2020%2032%2015%2032%2015C32%2015%2030%2022%2024%2024C24%2024%2028%2018%2020%2010C20%2010%2016%2018%2016%2026C16%2026%2013%2023%2014%2017C14%2017%2010%2020%2010%2026C10%2032%2014.686%2036%2021%2036C27.314%2036%2032%2031.314%2032%2025C32%2022%2030%2019.5%2030%2019.5C30%2019.5%2028%2024%2023%2025C23%2025%2026%2020%2020%200Z%22%20fill%3D%22%23EC0000%22/%3E%3C/svg%3E"
       enable-audio-input>
     </chat-messenger-chat-bubble>
   </chat-messenger>
@@ -962,6 +971,111 @@
     document.addEventListener("click", handleWidgetInteractions, true);
     document.addEventListener("touchend", handleWidgetInteractions, { passive: false, capture: true });
 
+    // Santander visual polish for the native Google widget. This keeps the native launcher,
+    // microphone, expand, minimize and accessibility behavior intact, while tightening the panel.
+    function injectSantanderChatStyle(root) {
+      if (!root || root.querySelector?.("style[data-santander-chat-style]")) return;
+      const style = document.createElement("style");
+      style.setAttribute("data-santander-chat-style", "true");
+      style.textContent = `
+        :host {
+          font-family: 'Inter', sans-serif !important;
+          --chat-messenger-color--primary: #EC0000;
+          --chat-messenger-color--primary-container: #FFF0F0;
+          --chat-messenger-color--surface: #FFFFFF;
+          --chat-messenger-color--surface-container: #FAFAFA;
+          --chat-messenger-color--surface-container-high: #F5F5F5;
+          --chat-messenger-color--outline: #E0E0E0;
+          --chat-messenger-color--link: #EC0000;
+        }
+
+        /* Native launcher: keep it visible and premium-looking when closed. */
+        button[class*="bubble"],
+        button[class*="launcher"],
+        [class*="chat-bubble"],
+        [class*="launcher"],
+        [part*="bubble"],
+        [part*="launcher"] {
+          background: #EC0000 !important;
+          border: 0 !important;
+          border-radius: 999px !important;
+          box-shadow: 0 16px 36px rgba(236,0,0,0.30), 0 8px 18px rgba(0,0,0,0.18) !important;
+          overflow: hidden !important;
+        }
+
+        /* Panel: smaller, floating, less empty-white feeling. */
+        [class*="chat-window"],
+        [class*="messenger-window"],
+        [class*="container"],
+        [class*="dialog"],
+        [role="dialog"] {
+          max-width: min(420px, calc(100vw - 56px)) !important;
+          width: min(420px, calc(100vw - 56px)) !important;
+          max-height: min(700px, calc(100vh - 120px)) !important;
+          height: min(700px, calc(100vh - 120px)) !important;
+          border-radius: 18px !important;
+          border: 1px solid #E0E0E0 !important;
+          box-shadow: 0 24px 70px rgba(0,0,0,0.22) !important;
+          overflow: hidden !important;
+          background: #FAFAFA !important;
+        }
+
+        header,
+        [class*="header"],
+        [class*="titlebar"],
+        [class*="toolbar"] {
+          background: #FFFFFF !important;
+          border-bottom: 1px solid #E0E0E0 !important;
+          box-shadow: inset 0 3px 0 #EC0000 !important;
+        }
+
+        [class*="message-list"],
+        [class*="messages"],
+        main {
+          background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 42%, #F5F5F5 100%) !important;
+        }
+
+        textarea,
+        input {
+          font-family: 'Inter', sans-serif !important;
+          letter-spacing: -0.01em !important;
+        }
+
+        @media (max-width: 600px) {
+          [class*="chat-window"],
+          [class*="messenger-window"],
+          [class*="container"],
+          [class*="dialog"],
+          [role="dialog"] {
+            width: calc(100vw - 28px) !important;
+            max-width: calc(100vw - 28px) !important;
+            height: min(680px, calc(100vh - 96px)) !important;
+            max-height: min(680px, calc(100vh - 96px)) !important;
+          }
+        }
+      `;
+      root.appendChild(style);
+    }
+
+    function polishSantanderChatWidget() {
+      const chat = document.querySelector("chat-messenger");
+      if (!chat) return;
+      chat.style.setProperty("right", "28px", "important");
+      chat.style.setProperty("bottom", "88px", "important");
+      chat.style.setProperty("position", "fixed", "important");
+      chat.style.setProperty("z-index", "999", "important");
+
+      const visit = (node) => {
+        if (!node) return;
+        if (node.shadowRoot) injectSantanderChatStyle(node.shadowRoot);
+        const root = node.shadowRoot || node;
+        root.querySelectorAll?.("*").forEach(el => {
+          if (el.shadowRoot) injectSantanderChatStyle(el.shadowRoot);
+        });
+      };
+      visit(chat);
+    }
+
     // ── CHAT INIT ──
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
@@ -974,8 +1088,11 @@
       );
 
       const chatEl = document.querySelector("chat-messenger");
+      polishSantanderChatWidget();
+      setTimeout(polishSantanderChatWidget, 300);
+      setTimeout(polishSantanderChatWidget, 1000);
 
-      const postProcessDOM = () => { patchAllMarkdown(); bindCarouselScrollListeners(); };
+      const postProcessDOM = () => { patchAllMarkdown(); bindCarouselScrollListeners(); polishSantanderChatWidget(); };
 
       chatEl.addEventListener("chat-messenger-response-received", (event) => {
         const outputs = event.detail?.raw?.outputs || [];
