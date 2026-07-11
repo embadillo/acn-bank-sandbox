@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ACN Bank - Virtual Assistant</title>
-  <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js">
-</script>
-<link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
-<link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+  <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -41,10 +40,12 @@
   </style>
 </head>
 <body>
+
   <div id="loadingScreen" class="loading-container">
     <h2>Connecting to ACN Bank secure channel...</h2>
     <p>Please wait while we transfer your verification session.</p>
   </div>
+
   <chat-messenger url-allowlist="*">
     <chat-messenger-container
       chat-title="ACN Bank Demo"
@@ -57,17 +58,16 @@
       <chat-messenger-close-button slot="titlebar-actions" title-text="Close"></chat-messenger-close-button>
     </chat-messenger-container>
   </chat-messenger>
+
   <script>
     /* ======================================================================
-       TEMPORARY DEMO WORKAROUND
-       The SDK sanitizer strips data-* attributes, ids, and button semantics.
-       Raw payloads live in JS memory; sanitized HTML only carries CSS classes.
-       Replace with supported SDK action handling when available.
+       REGISTRO DE WIDGETS Y HELPERS
     ====================================================================== */
     window.ACN_WIDGET_REGISTRY = {};
     const urlParams = new URLSearchParams(window.location.search);
     const kycRequestId = urlParams.get("r") || urlParams.get("kyc_request_id");
     const customerDocId = urlParams.get("c") || urlParams.get("customer_doc_id");
+
     const BASE = "https://raw.githubusercontent.com/embadillo/acn-bank-assets/refs/heads/main/";
     const PAYEE_LOGOS = {
       "hydro one":             BASE + "Hydro-Logo-from-web-558.jpeg",
@@ -77,30 +77,17 @@
       "toronto property tax":  BASE + "Captura%20de%20pantalla%202026-06-07%20141855.png"
     };
 
-    /* ======================================================================
-       SANITIZER
-       Gemini Live (gemini-3.1-flash-live) sometimes encodes double-quote
-       characters as <ctrl46> inside nested tool call argument payloads when
-       the input context is large (~20k+ tokens). This happens at the
-       tokenizer level and is not a model instruction issue.
-       This function intercepts raw toolCall.args before any render function
-       touches the payload, converts any <ctrlNN> sequences back to their
-       ASCII equivalents, and re-parses the JSON. If the JSON is already
-       clean the stringify/parse round-trip is a no-op.
-    ====================================================================== */
     function sanitizeLiveArgs(args) {
       if (!args || typeof args !== "object") return args;
       try {
-        const cleaned = JSON.stringify(args).replace(/<ctrl(\\d+)>/g, (_, n) =>
+        const cleaned = JSON.stringify(args).replace(/<ctrl(\d+)>/g, (_, n) =>
           String.fromCharCode(parseInt(n, 10))
         );
         return JSON.parse(cleaned);
       } catch (e) {
-        console.warn("ACN sanitizeLiveArgs: failed to clean args, returning original", e);
         return args;
       }
     }
-    /* ====================================================================== */
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -165,121 +152,44 @@
       const chatContainer =
         chat?.shadowRoot?.querySelector("df-messenger-chat") ||
         chat?.shadowRoot?.querySelector("chat-messenger-chat");
-      const userInput =
-        chatContainer?.shadowRoot?.querySelector("df-messenger-user-input") ||
-        chatContainer?.shadowRoot?.querySelector("chat-messenger-user-input");
       const messageList =
         chatContainer?.shadowRoot?.querySelector("df-messenger-message-list") ||
         chatContainer?.shadowRoot?.querySelector("chat-messenger-message-list");
-      const textarea =
-        userInput?.shadowRoot?.querySelector("textarea") ||
-        userInput?.shadowRoot?.querySelector("input");
-      const sendBtn =
-        userInput?.shadowRoot?.querySelector("button") ||
-        userInput?.shadowRoot?.querySelector(".send-icon");
-      return { chat, chatContainer, userInput, messageList, textarea, sendBtn };
+      return { chat, chatContainer, messageList };
     }
 
     /* ======================================================================
-       MARKDOWN RENDERER
-       Converts agent markdown to HTML. Applied as a DOM post-process pass
-       after each response since the SDK renders text as plain strings.
-       Handles both normal text responses and audio transcripts where all
-       newlines are collapsed into a single line.
+       RENDERIZADO MEJORADO: Markdown + Soporte Audio/HTML
     ====================================================================== */
     function normalizeFlattenedMarkdownTables(text) {
       let value = String(text ?? "");
-      if (!value.includes("|")) return value;
-      value = value.replace(/\||\s+\|/g, "|\n|");
-      value = value.replace(/([^|\n])\s+(\|[^|]+\|)/g, (match, pre, tableRow) => {
-        if ((tableRow.match(/\|/g) || []).length >= 2) {
-          return pre + "\n" + tableRow;
-        }
-        return match;
-      });
-      value = value.replace(/(\|)\s+([A-Z][^|])/g, "$1\n$2");
+      // Detecta tablas rotas (típico del STT de entrada por voz) y restaura saltos de línea lógicos
+      if (value.includes("|")) {
+        value = value.replace(/([^\n])(\s*\|[a-zA-Z0-9])/g, "$1\n$2");
+        value = value.replace(/(\|-+?\|)(\s*)(?=\w|\|)/g, "$1\n");
+      }
       return value;
     }
 
-    function looksLikeMarkdownTableRow(line) {
-      const trimmed = line.trim();
-      return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.split("|").length >= 3;
-    }
-
-    function isMarkdownSeparatorRow(line) {
-      return /^\s*\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line.trim());
-    }
-
-    function renderMarkdownTable(headerLine, separatorLine, bodyLines) {
-      const headers = headerLine.split("|").slice(1, -1).map(h => h.trim());
-      const rows = bodyLines
-        .filter(looksLikeMarkdownTableRow)
-        .map(row => row.split("|").slice(1, -1).map(cell => cell.trim()));
-      const ths = headers.map(h =>
-        `<th style="padding:7px 12px;border:1px solid #e0e4ea;background:#f4f6f9;font-weight:600;text-align:left;font-size:13px;">${h}</th>`
-      ).join("");
-      const trs = rows.map(cells => {
-        const tds = cells.map(d =>
-          `<td style="padding:7px 12px;border:1px solid #e0e4ea;font-size:13px;">${d}</td>`
-        ).join("");
-        return `<tr>${tds}</tr>`;
-      }).join("");
-      return `<div style="overflow-x:auto;width:100%;margin:8px 0;">`
-        + `<table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;">`
-        + `<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
-    }
-
-    function renderMarkdownTablesByLines(text) {
-      const lines = text.split("\n");
-      const out = [];
-      let i = 0;
-      while (i < lines.length) {
-        if (
-          i + 1 < lines.length &&
-          looksLikeMarkdownTableRow(lines[i]) &&
-          isMarkdownSeparatorRow(lines[i + 1])
-        ) {
-          const header = lines[i];
-          const separator = lines[i + 1];
-          const body = [];
-          i += 2;
-          while (i < lines.length && looksLikeMarkdownTableRow(lines[i])) {
-            body.push(lines[i]);
-            i += 1;
-          }
-          out.push(renderMarkdownTable(header, separator, body));
-        } else {
-          out.push(lines[i]);
-          i += 1;
-        }
-      }
-      return out.join("\n");
-    }
-
     function renderMarkdown(raw) {
+      // 1. Restaurar formato de tabla (solución al bug del micrófono)
       let html = normalizeFlattenedMarkdownTables(raw);
+      
+      // 2. Sanitización base
       html = escapeHtml(html);
-      html = renderMarkdownTablesByLines(html);
+      // 3. Renderizado de HTML nativo del bot (Estrategia 2: imágenes y enlaces)
+      html = html.replace(/&lt;img src=&quot;(.*?)&quot;(.*?)&gt;/g, "<img src='$1' $2 style='max-width:100%; border-radius:8px; margin:10px 0;'>");
+      html = html.replace(/&lt;a href=&quot;(.*?)&quot;(.*?)&gt;(.*?)&lt;\/a&gt;/g, "<a href='$1' $2 style='color:#1a56db; text-decoration:underline;'>$3</a>");
+      // 4. Reglas básicas de Markdown (Negrita e Itálica)
       html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-      html = html.replace(/(^|[^*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
-      html = html.replace(/`([^`]+)`/g,
-        `<code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.88em;font-family:monospace;color:#1a1a2e;">$1</code>`
-      );
-      html = html.replace(/((?:^[\*\-] .+\n?)+)/gm, block => {
-        const items = block.trim().split("\n").map(line =>
-          `<li style="margin:3px 0;">${line.replace(/^[\*\-] /, "").trim()}</li>`
-        ).join("");
-        return `<ul style="margin:6px 0;padding-left:18px;">${items}</ul>`;
-      });
-      html = html.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
-        const items = block.trim().split("\n").map(line =>
-          `<li style="margin:3px 0;">${line.replace(/^\d+\. /, "").trim()}</li>`
-        ).join("");
-        return `<ol style="margin:6px 0;padding-left:18px;">${items}</ol>`;
-      });
+      html = html.replace(/(^|[^\*])\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1<em>$2</em>");
+      // 5. Saltos de línea
       html = html.replace(/\n/g, "<br>");
+      
+      // Limpieza de BRs excedentes cerca de tablas HTML (si el bot pasa tags <table> directos)
       html = html.replace(/<br>\s*(<div style="overflow-x:auto;)/g, "$1");
       html = html.replace(/(<\/div>)\s*<br>/g, "$1");
+      
       return html;
     }
 
@@ -294,7 +204,6 @@
       ".message p",
       "p"
     ];
-    const MD_HAS_SYNTAX = /\*\*|__|\*[^*]|`|\|\s*:?-{3,}:?\s*\||\|\s+\|/;
 
     function patchMarkdownInShadow(root) {
       if (!root) return;
@@ -303,8 +212,8 @@
         if (els.length === 0) continue;
         els.forEach(el => {
           const raw = el.innerText ?? el.textContent ?? "";
-          if (MD_HAS_SYNTAX.test(raw)) {
-            console.log("ACN markdown raw:", JSON.stringify(raw));
+          // Chequeamos sintaxis markdown O etiquetas HTML escapadas (<img>)
+          if (raw.includes("**") || raw.includes("|") || raw.includes("&lt;img")) {
             el.innerHTML = renderMarkdown(raw);
             el.setAttribute("data-md-done", "true");
           }
@@ -323,8 +232,10 @@
       patchMarkdownInShadow(messageList);
       if (messageList.shadowRoot) patchMarkdownInShadow(messageList.shadowRoot);
     }
-    /* ====================================================================== */
 
+    /* ======================================================================
+       COMPONENTES DE INTERFAZ (WIDGETS INTERACTIVOS)
+    ====================================================================== */
     function buildPaymentCarousel(payload) {
       const payments = payload.payments || [];
       const wid = registerWidget(payments);
@@ -356,6 +267,7 @@
             ${btnHtml}
           </div>`;
       }).join("");
+
       const leftArrow = payments.length > 2 ? `
         <div class="acn-arrow-wrapper acn-arrow-left-wrapper" style="position:absolute;left:-5px;top:45%;transform:translateY(-50%);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s;">
           <div class="acn-arrow-btn left-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-right:3px;pointer-events:auto;">❮</div>
@@ -364,6 +276,7 @@
         <div class="acn-arrow-wrapper acn-arrow-right-wrapper" style="position:absolute;right:0px;top:45%;transform:translateY(-50%);z-index:30;opacity:1;pointer-events:auto;transition:opacity 0.2s;">
           <div class="acn-arrow-btn right-arrow" style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d1d5db;box-shadow:-2px 0 8px rgba(0,0,0,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1a56db;font-weight:bold;font-size:16px;padding-left:3px;pointer-events:auto;">❯</div>
         </div>` : "";
+
       return `
         <div class="acn-widget-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;overflow:hidden;padding:5px 0;">
           <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📅 ${escapeHtml(payload.title || "Upcoming scheduled payments")}</div>
@@ -429,62 +342,19 @@
         </div>`;
     }
 
-    function deepQuerySelector(selector, root = document) {
-      const found = root.querySelector?.(selector);
-      if (found) return found;
-      const all = root.querySelectorAll?.("*") || [];
-      for (const el of all) {
-        if (el.shadowRoot) {
-          const nested = deepQuerySelector(selector, el.shadowRoot);
-          if (nested) return nested;
-        }
-      }
-      return null;
-    }
-
-    function setNativeValue(element, value) {
-      const prototype = Object.getPrototypeOf(element);
-      const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
-      if (valueSetter) valueSetter.call(element, value);
-      else element.value = value;
-    }
-
+    /* ======================================================================
+       SOLUCIÓN APLICADA: Función acnSendMessage optimizada
+    ====================================================================== */
     function acnSendMessage(text) {
-      const chat = document.querySelector("chat-messenger");
-      try {
-        const textarea =
-          deepQuerySelector("textarea") ||
-          deepQuerySelector("input[type='text']") ||
-          deepQuerySelector("input");
-        if (!textarea) {
-          console.warn("No textarea/input found inside Shadow DOM");
-          if (chat?.sendQuery) chat.sendQuery(text);
-          return;
-        }
-        textarea.focus();
-        setNativeValue(textarea, text);
-        textarea.dispatchEvent(new InputEvent("input", {
-          bubbles: true, composed: true, inputType: "insertText", data: text
-        }));
-        textarea.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-        setTimeout(() => {
-          textarea.dispatchEvent(new KeyboardEvent("keydown", {
-            key: "Enter", code: "Enter", keyCode: 13, which: 13,
-            bubbles: true, composed: true
-          }));
-          const sendBtn =
-            deepQuerySelector("button[aria-label='Send']") ||
-            deepQuerySelector("button[title='Send']") ||
-            deepQuerySelector(".send-icon") ||
-            deepQuerySelector("button");
-          if (sendBtn && !sendBtn.disabled) sendBtn.click();
-        }, 150);
-      } catch (err) {
-        console.warn("Visible send failed. Falling back to silent sendQuery.", err);
-        if (chat?.sendQuery) chat.sendQuery(text);
+      const chatEl = document.querySelector("chat-messenger");
+      if (chatEl && typeof chatEl.sendQuery === "function") {
+        chatEl.sendQuery(text);
       }
     }
 
+    /* ======================================================================
+       EVENT HANDLERS & CAROUSEL
+    ====================================================================== */
     function updateCarouselArrows(track) {
       const root = track?.closest?.(".acn-widget-root");
       if (!root) return;
@@ -520,13 +390,13 @@
       const track = path.find(el => el.classList && el.classList.contains("acn-carousel-track"));
       if (track) bindTrackScroll(track);
     }
-
     document.addEventListener("mouseover", bindScrollListenerLazy, { capture: true, passive: true });
     document.addEventListener("touchstart", bindScrollListenerLazy, { capture: true, passive: true });
 
     function handleWidgetInteractions(e) {
       const path = e.composedPath ? e.composedPath() : [];
       const findInPath = (cls) => path.find(el => el.classList && el.classList.contains(cls));
+      
       const arrowBtn = findInPath("acn-arrow-btn");
       if (arrowBtn) {
         e.preventDefault();
@@ -542,6 +412,7 @@
         }
         return;
       }
+
       const cancelBtn = findInPath("acn-action-cancel");
       if (cancelBtn && !cancelBtn.classList.contains("acn-disabled")) {
         e.preventDefault();
@@ -560,10 +431,11 @@
           cancelBtn.style.pointerEvents = "none";
           cancelBtn.style.cursor = "default";
           const cta = item.cta_value || `cancel_payment:${item.payment_id || item.payee_name}`;
-          acnSendMessage(cta);
+          acnSendMessage(cta); 
         }
         return;
       }
+
       const selectBtn = findInPath("acn-action-select");
       if (selectBtn) {
         e.preventDefault();
@@ -579,21 +451,28 @@
         }
       }
     }
-
     document.addEventListener("click", handleWidgetInteractions, true);
     document.addEventListener("touchend", handleWidgetInteractions, { passive: false, capture: true });
 
+    /* ======================================================================
+       INITIALIZATION FINAL
+    ====================================================================== */
     window.addEventListener("chat-messenger-loaded", () => {
       const isVoiceHandoff = !!(kycRequestId && customerDocId);
       
-      // <<<<====== CORRECCIÓN APLICADA AQUÍ ======>>>>
       chatSdk.registerContext(
         chatSdk.prebuilts.ces.createContext({
+          // ✔️ ID DE DEPLOYMENT ACTUALIZADO
           deploymentName: "projects/483471568825/locations/us/apps/d61ad730-4835-43e8-93d5-3159bb492e08/deployments/bf58b863-2526-48c2-bb6e-03d9613527f7",
           tokenBroker: { enableTokenBroker: true, enableRecaptcha: false },
+          
+          // ✔️ SOLUCIÓN: El bot saluda primero automáticamente
+          enableWelcomeEvent: true, 
+
+          // ✔️ SOLUCIÓN: Evita el error 400 Bad Request
           sessionParameters: { 
             "is_voice_handoff": isVoiceHandoff,
-            "telephony-caller-id": null // Esta línea fuerza al SDK a reconocer el canal como WEBCHAT.
+            "telephony-caller-id": "" 
           }
         })
       );
@@ -610,17 +489,11 @@
             chunks.forEach(chunk => {
               const toolCall = chunk.toolCall;
               if (!toolCall) return;
-
-              // ── SANITIZER ────────────────────────────────────────────────
-              // Gemini Live encodes quotes as <ctrl46> in large-context turns.
-              // sanitizeLiveArgs normalizes the args before any render touches them.
               const cleanArgs = sanitizeLiveArgs(toolCall.args);
               const payload = cleanArgs?.payload;
-              // ─────────────────────────────────────────────────────────────
-
               if (!payload) return;
               const widgetName = payload.name || toolCall.displayName || toolCall.name || "";
-
+              
               if (widgetName === "acn-payment-carousel") {
                 chatEl.renderCustomCard([{ type: "html", html: buildPaymentCarousel(payload) }]);
               } else if (widgetName === "acn-payee-selector") {
@@ -659,5 +532,7 @@
       }
     });
   </script>
+
 </body>
+
 </html>
