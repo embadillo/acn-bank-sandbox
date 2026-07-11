@@ -125,11 +125,14 @@
       });
     }
 
-    function registerWidget(items) {
+    // NOTE: `meta` is new and optional — existing calls that only pass `items`
+    // keep working exactly as before (meta defaults to {}).
+    function registerWidget(items, meta) {
       cleanupRegistry();
       const wid = "w_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
       window.ACN_WIDGET_REGISTRY[wid] = {
         items: Array.isArray(items) ? items : [],
+        meta: meta || {},
         createdAt: Date.now()
       };
       return wid;
@@ -139,12 +142,20 @@
       return window.ACN_WIDGET_REGISTRY?.[widClass]?.items || [];
     }
 
+    function getWidgetMeta(widClass) {
+      return window.ACN_WIDGET_REGISTRY?.[widClass]?.meta || {};
+    }
+
     function getItemIndexFromClass(el) {
       if (!el || !el.classList) return -1;
       const itemClass = Array.from(el.classList).find(c => c.startsWith("acn-item-"));
       if (!itemClass) return -1;
       const index = Number(itemClass.replace("acn-item-", ""));
       return Number.isFinite(index) ? index : -1;
+    }
+
+    function getWidgetRootClass(el) {
+      return Array.from(el?.classList || []).find(c => c.startsWith("w_"));
     }
 
     function getChatParts() {
@@ -342,6 +353,129 @@
         </div>`;
     }
 
+    /* ----------------------------------------------------------------------
+       NUEVO WIDGET: acn-form-input
+       Formulario dinámico. `fields` (guardados en el registry como `items`)
+       define orden, tipo y validación de cada input. El submit arma
+       "{cta_value_prefix}|{field_id}:{value}|{field_id}:{value}..."
+    ---------------------------------------------------------------------- */
+    function buildFormInput(payload) {
+      const fields = payload.fields || [];
+      const wid = registerWidget(fields, {
+        cta_value_prefix: payload.cta_value_prefix || "form_submit"
+      });
+
+      const fieldsHtml = fields.map((f, index) => {
+        const isRequired = f.required !== false;
+        let inputHtml;
+
+        if (f.type === "select") {
+          const options = (f.options || []).map(o =>
+            `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`
+          ).join("");
+          inputHtml = `
+            <select class="acn-form-field acn-field-${index}" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;box-sizing:border-box;color:#1a1a2e;">
+              <option value="" selected>Select...</option>
+              ${options}
+            </select>`;
+        } else {
+          const inputType = f.type === "number" ? "number" : f.type === "tel" ? "tel" : "text";
+          inputHtml = `
+            <input type="${inputType}" class="acn-form-field acn-field-${index}"
+              placeholder="${escapeHtml(f.placeholder || "")}"
+              style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+        }
+
+        return `
+          <div class="acn-form-row" style="margin-bottom:14px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#1a1a2e;margin-bottom:5px;">
+              ${escapeHtml(f.label)}${isRequired ? ' <span style="color:#9b1c1c;">*</span>' : ""}
+            </label>
+            ${inputHtml}
+            ${f.hint ? `<div style="font-size:11px;color:#9ca3af;margin-top:4px;">${escapeHtml(f.hint)}</div>` : ""}
+            <div class="acn-field-error acn-error-${index}" style="display:none;font-size:12px;color:#9b1c1c;margin-top:4px;"></div>
+          </div>`;
+      }).join("");
+
+      return `
+        <div class="acn-widget-root acn-form-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
+          <div style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:18px;">
+            <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">📝 ${escapeHtml(payload.title || "Enter details")}</div>
+            ${payload.subtitle ? `<div style="font-size:13px;color:#6b7280;margin-bottom:14px;">${escapeHtml(payload.subtitle)}</div>` : ""}
+            <div class="acn-form-fields">${fieldsHtml}</div>
+            <div class="acn-action-form-submit" style="width:100%;padding:11px 0;border-radius:8px;background:#1a56db;color:#fff;font-size:14px;font-weight:600;text-align:center;cursor:pointer;margin-top:6px;pointer-events:auto;">
+              ${escapeHtml(payload.cta_label || "Submit")}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    /* ----------------------------------------------------------------------
+       NUEVO WIDGET: acn-amount-input
+       Input numérico con prefijo de moneda, referencia de due_amount,
+       botones de acceso rápido (quick_amounts) y validación de rango.
+       El submit envía "{cta_value_prefix} {amount}".
+    ---------------------------------------------------------------------- */
+    function buildAmountInput(payload) {
+      const quickAmounts = payload.quick_amounts || [];
+      const wid = registerWidget(quickAmounts, {
+        cta_value_prefix: payload.cta_value_prefix || "pay amount",
+        min_amount: payload.min_amount,
+        max_amount: payload.max_amount
+      });
+
+      const quickBtnsHtml = quickAmounts.map((q, index) => `
+        <div class="acn-action-quick-amount acn-item-${index}" style="padding:8px 14px;border:1px solid #d1d5db;border-radius:20px;font-size:13px;font-weight:600;color:#1a56db;cursor:pointer;white-space:nowrap;pointer-events:auto;">
+          ${escapeHtml(q.label)}
+        </div>`).join("");
+
+      return `
+        <div class="acn-widget-root acn-amount-root ${wid}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box;">
+          <div style="background:#fff;border:1px solid #e0e4ea;border-radius:16px;padding:18px;">
+            <div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">💲 ${escapeHtml(payload.title || "Enter Amount")}</div>
+            ${payload.subtitle ? `<div style="font-size:13px;color:#6b7280;margin-bottom:14px;">${escapeHtml(payload.subtitle)}</div>` : ""}
+            <div style="display:flex;align-items:center;border:1px solid #d1d5db;border-radius:8px;padding:0 12px;margin-bottom:8px;">
+              <span style="font-size:14px;font-weight:600;color:#374151;margin-right:6px;">${escapeHtml(payload.currency || "CAD")}</span>
+              <input type="number" class="acn-amount-field" placeholder="${escapeHtml(payload.placeholder || "0.00")}"
+                style="flex:1;border:none;outline:none;padding:11px 0;font-size:15px;box-sizing:border-box;">
+            </div>
+            ${payload.due_amount != null ? `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">🗓️ Amount due: <strong>${escapeHtml(payload.currency || "CAD")} ${escapeHtml(payload.due_amount)}</strong></div>` : ""}
+            <div class="acn-field-error acn-amount-error" style="display:none;font-size:12px;color:#9b1c1c;margin-bottom:8px;"></div>
+            ${quickBtnsHtml ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${quickBtnsHtml}</div>` : ""}
+            <div class="acn-action-amount-submit" style="width:100%;padding:11px 0;border-radius:8px;background:#1a56db;color:#fff;font-size:14px;font-weight:600;text-align:center;cursor:pointer;pointer-events:auto;">
+              ${escapeHtml(payload.cta_label || "Confirm amount")}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    /* ----------------------------------------------------------------------
+       Validación de un campo de formulario contra su definición.
+       Devuelve el mensaje de error, o null si es válido.
+    ---------------------------------------------------------------------- */
+    function validateFormField(fieldDef, rawValue) {
+      const value = (rawValue ?? "").toString().trim();
+      const isRequired = fieldDef.required !== false;
+
+      if (isRequired && value === "") {
+        return (fieldDef.validation && fieldDef.validation.error_message) || `${fieldDef.label} is required.`;
+      }
+      if (value !== "" && fieldDef.validation) {
+        const v = fieldDef.validation;
+        if (v.pattern) {
+          try {
+            const re = new RegExp(v.pattern);
+            if (!re.test(value)) return v.error_message || `${fieldDef.label} is invalid.`;
+          } catch (e) {
+            console.warn("ACN: invalid regex pattern for field", fieldDef.field_id, e);
+          }
+        }
+        if (v.min_length && value.length < v.min_length) return v.error_message || `${fieldDef.label} is too short.`;
+        if (v.max_length && value.length > v.max_length) return v.error_message || `${fieldDef.label} is too long.`;
+      }
+      return null;
+    }
+
     /* ======================================================================
        SOLUCIÓN APLICADA: Función acnSendMessage optimizada
     ====================================================================== */
@@ -420,7 +554,7 @@
         const card = findInPath("acn-card");
         const root = findInPath("acn-widget-root");
         const index = getItemIndexFromClass(card);
-        const widClass = Array.from(root?.classList || []).find(c => c.startsWith("w_"));
+        const widClass = getWidgetRootClass(root);
         const item = widClass ? getWidgetItems(widClass)[index] : null;
         if (item) {
           cancelBtn.textContent = "Cancelled";
@@ -442,13 +576,113 @@
         e.stopPropagation();
         const root = findInPath("acn-widget-root");
         const index = getItemIndexFromClass(selectBtn);
-        const widClass = Array.from(root?.classList || []).find(c => c.startsWith("w_"));
+        const widClass = getWidgetRootClass(root);
         const item = widClass ? getWidgetItems(widClass)[index] : null;
         if (item) {
           selectBtn.style.background = "#f0f4ff";
           const cta = item.cta_value || `select_payee:${item.payee_id || item.payee_name}`;
           acnSendMessage(cta);
         }
+        return;
+      }
+
+      // ---- NUEVO: submit de acn-form-input ----
+      const formSubmitBtn = findInPath("acn-action-form-submit");
+      if (formSubmitBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const root = findInPath("acn-widget-root");
+        const widClass = getWidgetRootClass(root);
+        const fields = widClass ? getWidgetItems(widClass) : [];
+        const meta = widClass ? getWidgetMeta(widClass) : {};
+
+        let hasError = false;
+        const parts = [];
+
+        fields.forEach((fieldDef, index) => {
+          const inputEl = root.querySelector(`.acn-field-${index}`);
+          const rawValue = inputEl ? inputEl.value : "";
+          const errorEl = root.querySelector(`.acn-error-${index}`);
+          const errorMsg = validateFormField(fieldDef, rawValue);
+
+          if (errorMsg) {
+            hasError = true;
+            if (errorEl) {
+              errorEl.textContent = errorMsg;
+              errorEl.style.display = "block";
+            }
+          } else {
+            if (errorEl) errorEl.style.display = "none";
+            parts.push(`${fieldDef.field_id}:${rawValue.toString().trim()}`);
+          }
+        });
+
+        if (hasError) return;
+
+        formSubmitBtn.textContent = "Submitting...";
+        formSubmitBtn.style.pointerEvents = "none";
+        formSubmitBtn.style.opacity = "0.7";
+
+        const message = `${meta.cta_value_prefix || "form_submit"}|${parts.join("|")}`;
+        acnSendMessage(message);
+        return;
+      }
+
+      // ---- NUEVO: tap de quick_amount en acn-amount-input ----
+      const quickAmountBtn = findInPath("acn-action-quick-amount");
+      if (quickAmountBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const root = findInPath("acn-widget-root");
+        const widClass = getWidgetRootClass(root);
+        const index = getItemIndexFromClass(quickAmountBtn);
+        const item = widClass ? getWidgetItems(widClass)[index] : null;
+        if (item) {
+          quickAmountBtn.style.background = "#1a56db";
+          quickAmountBtn.style.color = "#fff";
+          acnSendMessage(item.cta_value);
+        }
+        return;
+      }
+
+      // ---- NUEVO: submit de acn-amount-input ----
+      const amountSubmitBtn = findInPath("acn-action-amount-submit");
+      if (amountSubmitBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const root = findInPath("acn-widget-root");
+        const widClass = getWidgetRootClass(root);
+        const meta = widClass ? getWidgetMeta(widClass) : {};
+        const input = root.querySelector(".acn-amount-field");
+        const errorEl = root.querySelector(".acn-amount-error");
+        const raw = input ? input.value : "";
+        const amount = parseFloat(raw);
+
+        let errorMsg = null;
+        if (raw === "" || Number.isNaN(amount)) {
+          errorMsg = "Please enter a valid amount.";
+        } else if (meta.min_amount != null && amount < meta.min_amount) {
+          errorMsg = `Minimum amount is ${meta.min_amount}.`;
+        } else if (meta.max_amount != null && amount > meta.max_amount) {
+          errorMsg = `Maximum amount is ${meta.max_amount}.`;
+        }
+
+        if (errorMsg) {
+          if (errorEl) {
+            errorEl.textContent = errorMsg;
+            errorEl.style.display = "block";
+          }
+          return;
+        }
+        if (errorEl) errorEl.style.display = "none";
+
+        amountSubmitBtn.textContent = "Confirmed";
+        amountSubmitBtn.style.pointerEvents = "none";
+        amountSubmitBtn.style.opacity = "0.7";
+
+        const message = `${meta.cta_value_prefix || "pay amount"} ${amount.toFixed(2)}`;
+        acnSendMessage(message);
+        return;
       }
     }
     document.addEventListener("click", handleWidgetInteractions, true);
@@ -500,6 +734,10 @@
                 chatEl.renderCustomCard([{ type: "html", html: buildPayeeSelector(payload) }]);
               } else if (widgetName === "acn-payment-receipt") {
                 chatEl.renderCustomCard([{ type: "html", html: buildPaymentReceipt(payload) }]);
+              } else if (widgetName === "acn-form-input") {
+                chatEl.renderCustomCard([{ type: "html", html: buildFormInput(payload) }]);
+              } else if (widgetName === "acn-amount-input") {
+                chatEl.renderCustomCard([{ type: "html", html: buildAmountInput(payload) }]);
               }
             });
           });
